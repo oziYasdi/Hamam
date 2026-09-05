@@ -1,0 +1,345 @@
+1. Web Uygulaması mı, Masaüstü Uygulama mı?
+Kesinlikle Web Uygulaması (Cloud-based / SaaS) olarak geliştirmen çok daha mantıklıdır.
+
+Erişilebilirlik: Resepsiyondaki masaüstü bilgisayardan, yöneticinin evdeki tabletinden veya hamam müdürünün telefonundan anlık doluluk ve personel takibi yapılabilir. Masaüstü uygulamada bu senkronizasyonu sağlamak oldukça zahmetlidir.
+
+Cihaz Bağımsızlığı: İşletmenin bilgisayarı bozulsa dahi yeni bir cihaza tarayıcı açıp giriş yaparak kaldıkları yerden devam edebilirler.
+
+Güncelleme Kolaylığı: Sistemde bir hata düzelttiğinde veya yeni bir paket/özellik eklediğinde tüm müşterilerin anında güncellenir. Masaüstü uygulamalarda her bilgisayara tek tek güncel sürümü yükletmek ciddi bir destektir.
+
+Çoklu Şube / Çoklu İşletme Desteği: Web altyapısı, ileride ürünü birden fazla hamam veya SPA merkezine satmanı çocuk oyuncağı hâline getirir.
+
+2. İleride Birden Fazla İşletmeye Satıldığında Çıkabilecek Sorunlar
+Uygulamayı birden fazla hamama satmaya başladığında (SaaS aşaması) teknik ve operasyonel bazı zorluklarla karşılaşırsın:
+
+Veri İzolasyonu ve Güvenliği: Bir hamamın, başka bir hamamın Müşteri Verilerini, Gelir/Gider veya Doluluk Oranlarını kesinlikle görmemesi gerekir. Yanlış tasarlanmış bir veritabanı mimarisi (Multi-tenancy) veri sızıntılarına yol açabilir.
+
+KVKK ve Müşteri Gizliliği: Hamama gelen misafirlerin adı, telefonu, hatta opsiyonel kişisel bilgileri (alerjiler, özel sağlık durumları vb.) saklanacağından Kişisel Verileri Koruma Kanunu'na (KVKK) tam uyum şarttır.
+
+Özel İstekler ve Özelleştirme Baskısı: Her işletme kendi çalışma saatini, paket türlerini, komisyon oranlarını veya fiş/fatura şablonunu özelleştirmek isteyecektir. Kod yapısının esnek (konfigüre edilebilir) tasarlanması gerekir.
+
+İnternet Kesintileri: Hamamlar genelde bodrum veya alt katlarda yer alabilir ve internet kesildiğinde resepsiyonun durmaması gerekir. Web uygulamasının PWA (Progressive Web App) desteğiyle çevrimdışı (offline) modda da temel işlevleri yürütmesi sağlanmalıdır.
+
+Eşzamanlı Randevu Çakışmaları: Aynı masör/tellak veya aynı sauna/odaya aynı saat diliminde iki farklı resepsiyonist tarafından randevu girilmesini engelleyen güçlü bir kilit (locking) mekanizması tasarlanmalıdır.
+
+3. İşletmelere Kurulum ve Dağıtım Süreçleri Nasıl Olmalı?
+Web tabanlı bir model seçtiğin için geleneksel "dosya indir, setup.exe çalıştır" gibi fiziksel kurulum süreçlerine ihtiyacın kalmaz.
+
+Merkezi Bulut Sunucu (Cloud SaaS Model):
+Uygulamanı AWS, Google Cloud veya DigitalOcean gibi güvenilir bir bulut sunucuda barındırırsın.
+
+Domain / Subdomain Yapısı:
+Her işletmeye özel bir giriş adresi tanımlayabilirsin. Örneğin: ahmethamam.seninuygulaman.com veya tüm işletmeler app.seninuygulaman.com adresinden kendi kullanıcı adı/şifresiyle giriş yapar.
+
+Gelişmiş Rol ve Yetkilendirme (RBAC):
+
+Süper Admin (Sen): Tüm işletmeleri, abonelik durumlarını ve ödemelerini yönettiğin panel.
+
+İşletme Yöneticisi: Kendi çalışanlarını, seans saatlerini, paket fiyatlarını ve raporları görür.
+
+Resepsiyon / Kasa: Sadece randevu oluşturur, müşteri kaydeder ve ödeme alır.
+
+Personel (Tellak/Masör): Sadece kendi günlük seans programını görür.
+
+Donanım Entegrasyonları (Opsiyonel Kurulum):
+İşletmeye gittiğinde kurulacak tek şey yerel donanımlardır:
+
+Adisyon / Fiş Yazıcısı (Termal yazıcı entegrasyonu)
+
+Müşteri Kartı / Bileklik Okuyucuları (NFC / RFID sistemleri)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+sence her işletmenin ayrı datası olması gerekmez mi?
+
+
+
+Haklısın, mantıken düşünüldüğünde "Her işletmenin verisi tamamen ayrı olmalı" düşüncesi çok doğru. Ancak yazılım mimarisinde bu "ayrılık" fiziki (ayrı veritabanları) veya mantıksal (aynı veritabanı içinde izolasyon) olarak iki farklı yöntemle sağlanır.
+
+SaaS (Software as a Service) dünyasında işletmelerin verilerini ayırmak için kullanılan 3 ana veritabanı mimarisi vardır. Senin projen için hangisinin mantıklı olduğuna birlikte bakalım:
+
+1. Mantıksal İzolasyon (Shared Database, Shared Schema)
+Önceki cevabımda önerdiğim yöntemdir.
+
+Nasıl Çalışır? Tüm işletmeler (Hamam A, Hamam B, Hamam C) tek bir büyük veritabanını kullanır. Ancak her tabloda tenant_id (işletme kodu) alanı bulunur.
+
+Veri Güvenliği: Backend kod seviyesinde atılan her sorguya WHERE tenant_id = 'hamam_a' şartı otomatik eklenir. Hamam A kesinlikle Hamam B'nin verisine erişemez.
+
+Avantajları:
+
+Çok Ucuzdur: 100 farklı işletmen olsa bile tek bir sunucu/veritabanı maliyetin olur.
+
+Bakımı ve Güncellemesi Çok Kolaydır: Veritabanına yeni bir kolon/özellik ekleyeceğinde tek bir sorgu ile tüm işletmeler anında güncellenir.
+
+Dezavantajı: Kod tarafında bir hata yapılırsa (örneğin WHERE tenant_id yazılması unutulursa) veri sızıntısı riski doğabilir. (Bu risk modern ORM kütüphaneleri ve yetkilendirme katmanları ile sıfıra indirilir).
+
+2. Şema Seviyesinde İzolasyon (Shared Database, Separate Schema)
+Nasıl Çalışır? Yine tek bir veritabanı sunucusu vardır ancak veritabanının içinde her işletme için ayrı bir "Schema" (Klasör gibi düşünebilirsin) açılır (tenant_hamam_a, tenant_hamam_b).
+
+Veri Güvenliği: Veriler fiziksel olarak aynı veritabanı motorunda ama farklı klasörlerde durur. Güvenlik seviyesi daha yüksektir.
+
+Avantajları:
+
+İşletmelerin verisi birbirinden daha net ayrılır.
+
+Tek bir sunucu kullanıldığı için maliyet hâlâ makuldür.
+
+Dezavantajı: İşletme sayısı arttıkça (örneğin 500 hamama ulaştığında) veritabanı yönetimi ve yedek alması zorlaşabilir.
+
+3. Fiziksel İzolasyon (Separate Database per Tenant)
+Tam olarak senin bahsettiğin yöntem.
+
+Nasıl Çalışır? Sisteme kaydolan her yeni hamam için tamamen ayrı, bağımsız bir veritabanı oluşturulur (db_hamam_a, db_hamam_b).
+
+Veri Güvenliği: Maksimum güvenliktir. Hamam A'nın veritabanı çökse veya silinse bile Hamam B bundan hiç etkilenmez.
+
+Avantajları:
+
+Mükemmel İzolasyon: Yanlışlıkla başka işletmenin verisini çekme ihtimali %0'dır.
+
+Özel İstekler: Çok büyük bir VIP hamam zinciri geldiğinde, onun veritabanını ayrı bir sunucuya taşıyıp ona özel optimize edebilirsin.
+
+Dezavantajları:
+
+Yüksek Maliyet: 100 işletme için 100 ayrı veritabanı çalıştırmak ciddi bir sunucu maliyeti yaratır.
+
+Güncelleme Çilesi: Veritabanında küçük bir değişiklik yapacağında 100 ayrı veritabanında tek tek script çalıştırman gerekir.
+
+Hangisini Tercih Etmelisin?
+Büyüme hedeflerine ve işletmelerin profiline göre karar verebilirsin:
+
+Başlangıç ve Hızlı Büyüme İçin (Önerilen): 1. Yöntem (Shared Database) ile başlamaktır. Maliyetleri düşük tutar, sistemi hızlıca yaymanı sağlar. Zaten PostgreSQL gibi gelişmiş veritabanlarında Row Level Security (RLS) kullanarak veritabanı seviyesinde bile verilerin karışmasını kesin olarak engelleyebilirsin.
+
+Kurumsal / Prestijli Müşteriler İçin: Eğer çok büyük bir SPA zinciriyle anlaşırsan ve adamlar "Biz verimizin başka hiçbir firmayla aynı veritabanında durmasını istemiyoruz" derse, onlar için 3. Yöntemi (Ayrı Veritabanı) uygulayabilir ve onlara daha yüksek bir abonelik fiyatı (Enterprise Plan) çıkarabilirsin.
+
+
+
+
+DB Yapısı
+
+			[ company ] (Şirket)
+                  		│
+            [ branches ] (Hamam 1, Hamam 2, Hamam 3)
+           		        │
+ ┌────────────────┼────────────────┬────────────────┐
+ │                │                │                │
+[ users ]    [ staff ]    [ customers ]    [ packages ]
+(Kullanıcılar) (Çalışanlar) (Müşteriler)   (Paketler)
+ │                │                │                │
+ └────────────────┴───────┬────────┴────────────────┘
+                          ▼
+                  [ appointments ] (Seanslar)
+
+
+
+
+
+
+branches (Yeni Tablo: Hamamlar / Şubeler)
+Şirkete bağlı her bir fiziksel hamamı ifade eder.
+
+id (UUID, PK)
+
+name (VARCHAR): Hamam/Şube adı (ör. "Kaleiçi Şubesi", "Lara Şubesi").
+
+address (TEXT): Adres bilgisi.
+
+phone (VARCHAR): Şube telefon numarası.
+
+is_active (BOOLEAN)
+
+
+
+
+
+users (Kullanıcılar ve Şube Yetkilendirmesi)
+Kullanıcının hangi hamam(lar)a erişebileceğini belirlemek için Şube Yetki Tablosu ekliyoruz.
+
+users Tablosu:
+
+id (UUID, PK)
+
+full_name, email, password_hash
+
+role (ENUM):
+
+'COMPANY_ADMIN' (Tüm hamamları/şubeleri gören yetkili)
+
+'BRANCH_USER' (Sadece yetkili olduğu hamamı gören resepsiyonist/personel)
+
+user_branches (Yeni Tablo: Kullanıcı-Şube Yetki Eşleşmesi):
+Bir kullanıcının (örneğin gezici bir müdürün) birden fazla hamama yetkisi olması durumunu yönetmek için.
+
+user_id (UUID, FK -> users.id)
+
+branch_id (UUID, FK -> branches.id)
+
+(Bileşik Birincil Anahtar: PRIMARY KEY (user_id, branch_id))
+
+
+
+
+customers (Müşteriler ve Ayrıştırma)
+Müşterileri şube bazlı ayırmanın en esnek yolu: Müşterinin ilk kayıt olduğu/bağlı olduğu ana şubeyi tutmaktır.
+
+id (UUID, PK)
+
+branch_id (UUID, FK -> branches.id): Müşterinin kayıtlı olduğu hamam.
+
+full_name (VARCHAR)
+
+phone (VARCHAR, UNIQUE)
+
+gender (ENUM)
+
+notes (TEXT)
+
+Esneklik İpucu: Müşteri A Hamamı'nda kayıtlı olsa bile B Hamamı'na gittiğinde telefon numarasından aratılıp bulunabilir ve B Hamamı'nda da randevu oluşturulabilir.
+
+
+
+
+
+staff (Çalışanlar / Tellak, Masör)
+Çalışanlar belirli bir şubeye bağlıdır.
+
+id (UUID, PK)
+
+branch_id (UUID, FK -> branches.id): Çalışanın görev yaptığı hamam.
+
+full_name (VARCHAR)
+
+gender (ENUM)
+
+commission_rate (DECIMAL)
+
+
+
+
+packages (Paketler / Hizmetler)
+Şubelerin fiyatları ve sunduğu hizmetler farklı olabilir (örneğin VIP şubede kese-köpük fiyatı daha yüksek olabilir).
+
+id (UUID, PK)
+
+branch_id (UUID, FK -> branches.id): Paketin geçerli olduğu hamam.
+
+title (VARCHAR)
+
+duration_minutes (INT)
+
+price (DECIMAL)
+
+
+
+
+
+appointments (Seanslar / Randevular)
+Randevunun hangi hamamda gerçekleştiğini tutar.
+
+id (UUID, PK)
+
+branch_id (UUID, FK -> branches.id): (Çok Önemli) Seansın yapıldığı hamam.
+
+customer_id (UUID, FK -> customers.id)
+
+staff_id (UUID, FK -> staff.id)
+
+package_id (UUID, FK -> packages.id)
+
+appointment_date (DATE)
+
+start_time (TIME)
+
+end_time (TIME)
+
+status (ENUM)
+
+
+
+
+Sistem Yazılım Tarafında Nasıl Çalışacak?
+Giriş Anı (Login): Resepsiyonist sisteme giriş yaptığında, sistem onun user_branches tablosundaki yetkilerine bakar. Sadece yetkili olduğu hamamın takvimi ve müşterileri ekrana gelir.
+
+Şube Değiştirici (Branch Switcher): Eğer kullanıcı 'COMPANY_ADMIN' ise, panelin üst kısmında bir açılır menü (dropdown) belirir:
+
+[ Tüm Şubeler ] / [ Kaleiçi Şubesi ] / [ Lara Şubesi ]
+Bu sayede genel müdür tek tıkla şubeler arası geçiş yapabilir veya tüm hamamların toplam cirosunu ve doluluğunu tek ekranda görebilir.
+
+
+
+
+tamam mantıken oluşturduk database kısmını. Sence bu durumdan sonrasında ben yazılıma nasıl geçmeliyim?
+Veritabanı mimarisini netleştirdikten sonra doğrudan kod yazmaya başlamak yerine, projeyi adımlara bölerek ilerlemek hem zaman kazandırır hem de yolun ortasında tıkanmanı engeller.
+
+Aşağıdaki 5 adımlı yol haritasını takip ederek yazılım sürecini adım adım hayata geçirebilirsin:
+
+Adım 1: Teknoloji Yığınını (Tech Stack) Seç
+Uygulamanın hızlı, güvenilir ve sürdürülebilir olması için güncel ve topluluk desteği güçlü teknolojiler seçmelisin:
+
+Backend (Arka Plan): Node.js (NestJS / Express) veya C# (.NET Core). Önerim: NestJS veya Express.js (Hızlı prototipleme için).
+
+Database (Veritabanı): PostgreSQL. (İlişkisel yapısı, UUID desteği ve hızı sebebiyle hamam/randevu yönetimine mükemmel uyar).
+
+Frontend (Arayüz): React.js veya Next.js + TailWind CSS + Shadcn UI veya Ant Design. (Arayüzde takvim ve sürükle-bırak bileşenleri kullanacağımız için React ekosistemi çok güçlüdür).
+
+Takvim Bileşeni (UI için): FullCalendar.js veya React-Big-Calendar. (Seans saatlerini, dolulukları ve personel atamalarını görselleştirmek için en kritik kütüphanedir).
+
+Adım 2: Backend API Endpoints (Servisleri) Tasarla
+Önce veritabanına veri yazıp okuyacak olan arka plan servislerini tanımla. CRUD (Oluştur, Oku, Güncelle, Sil) işlemlerini şu modüller için yazmalısın:
+
+Auth & Branch: Login, şube seçimi ve kullanıcı yetkileri.
+
+Staff & Packages: Çalışan ekleme, vardiya saatleri, hizmet/paket tanımları.
+
+Customers: Müşteri arama, yeni müşteri kaydı, geçmiş seansları.
+
+Appointments (Çekirdek Modül):
+
+GET /appointments?branch_id=X&date=2026-09-05 (Günün seanslarını getir)
+
+POST /appointments (Yeni seans/randevu oluştur)
+
+Backend'deki En Kritik İş Mantığı (Business Logic):
+Randevu oluştururken veritabanına yazmadan önce şu 2 kontrolü yapmalısın:
+
+Seçilen personel o saat diliminde başka bir seansta mı?
+
+Müşterinin o saatte başka bir şubede veya aynı şubede randevusu var mı?
+
+Adım 3: Frontend (Resepsiyonist Ekranı) UI Tasarımı
+Resepsiyonistin gün içinde en çok bakacağı ekran Günlük Takvim / Doluluk Ekranı olacaktır. Bu ekranın tasarımı karmaşık olmamalı, tek bakışta anlaşılmalıdır:
+
+Yatay Eksende: Çalışanlar (Ahmet Tellak, Mehmet Masör vb.).
+
+Dikey Eksende: Saat dilimleri (09:00, 10:00, 11:00...).
+
+Kutucuklar (Seanslar): Paket adı, Müşteri adı ve Durum Rengi (Örn: Yeşil = Onaylı/Ödendi, Sarı = Bekliyor, Kırmızı = İptal).
+
+Adım 4: Minimum Uygulanabilir Ürün (MVP) Kapsamını Belirle
+İlk günden uygulamanın tüm özelliklerini bitirmeye çalışma. Sadece resmin çekirdeğini kapsayan MVP sürümünü çıkarıp hamamda test etmelisin:
+
+[x] Giriş yapma ve Şube seçimi
+
+[x] Müşteri kaydı
+
+[x] Çalışan ve Paket ekleme
+
+[x] Takvim üzerinden seans/randevu oluşturma ve personel atama
+
+[x] Basit Günlük Ciro/Ödeme alma ekranı
+
+(SMS hatırlatma, ayrıntılı ciro raporları, patron mobil uygulaması gibi özellikleri 2. versiyona bırak).
+
+Adım 5: Sahada Test ve Geri Bildirim (Pilot Kullanım)
+MVP hazır olduğunda yazılımı anlaşacağın ilk hamamın resepsiyonuna kur. Resepsiyonistin uygulamayı kullanırken nerede takıldığını, hangi düğmenin küçük geldiğini veya hangi adımı yavaş attığını izle. Gerçek saha geri bildirimiyle sistemi mükemmelleştir.
