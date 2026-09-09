@@ -1,101 +1,75 @@
 import React, { useState } from 'react';
-import CustomerManagement from './components/CustomerManagement';
-import ServiceManagement from './components/ServiceManagement';
+import { Calendar, Users, Settings } from 'lucide-react';
+import AppointmentManagement from './components/AppointmentManagement';
 import EmployeeManagement from './components/EmployeeManagement';
-import AppointmentCalendar from './components/AppointmentManagement';
+import DefinitionsManagement from "./components/DefinitionsManagement";
+
 function App() {
-  const [activeTab, setActiveTab] = useState('calendar');
+  // Aktif sekmeyi takip etmek için state tanımı
+  const [activeTab, setActiveTab] = useState('appointments');
 
   return (
-    <div>
-      {/* ÜST MENÜ (NAVBAR) */}
-      <nav style={{ background: '#1e293b', padding: '15px 20px', display: 'flex', gap: '15px' }}>
-        <button
-          onClick={() => setActiveTab('calendar')}
-          style={{
-            background: activeTab === 'calendar' ? '#3b82f6' : '#334155',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-           Görsel Takvim
-        </button>
+    <div style={{ fontFamily: 'Arial, sans-serif' }}>
+      {/* ÜST GEZİNTİ MENÜSÜ (NAVBAR) */}
+      <nav style={{
+        background: '#0f172a',
+        padding: '15px 30px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        color: '#fff'
+      }}>
+        <h1 style={{ margin: 0, fontSize: '20px', letterSpacing: '1px' }}>
+          Context Hamam & SPA Takip Sistemi
+        </h1>
 
-        <button
-          onClick={() => setActiveTab('appointments')}
-          style={{
-            background: activeTab === 'appointments' ? '#3b82f6' : '#334155',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-           Randevu Listesi & Ekleme
-        </button>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button
+            onClick={() => setActiveTab('appointments')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '6px',
+              border: 'none', cursor: 'pointer', fontWeight: 'bold',
+              backgroundColor: activeTab === 'appointments' ? '#2563eb' : 'transparent',
+              color: '#fff'
+            }}
+          >
+            <Calendar size={18} /> Randevu Listesi
+          </button>
 
-        <button
-          onClick={() => setActiveTab('customers')}
-          style={{
-            background: activeTab === 'customers' ? '#3b82f6' : '#334155',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          Müşteri Yönetimi
-        </button>
+          <button
+            onClick={() => setActiveTab('employees')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '6px',
+              border: 'none', cursor: 'pointer', fontWeight: 'bold',
+              backgroundColor: activeTab === 'employees' ? '#2563eb' : 'transparent',
+              color: '#fff'
+            }}
+          >
+            <Users size={18} /> Personeller
+          </button>
 
-        <button
-          onClick={() => setActiveTab('services')}
-          style={{
-            background: activeTab === 'services' ? '#3b82f6' : '#334155',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          Hizmet Yönetimi
-        </button>
-
-        <button
-          onClick={() => setActiveTab('employees')}
-          style={{
-            background: activeTab === 'employees' ? '#3b82f6' : '#334155',
-            color: '#fff',
-            border: 'none',
-            padding: '10px 20px',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          Çalışan Yönetimi
-        </button>
+          <button
+            onClick={() => setActiveTab('definitions')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '6px',
+              border: 'none', cursor: 'pointer', fontWeight: 'bold',
+              backgroundColor: activeTab === 'definitions' ? '#2563eb' : 'transparent',
+              color: '#fff'
+            }}
+          >
+            <Settings size={18} /> Tanımlar
+          </button>
+        </div>
       </nav>
 
-      {/* İÇERİK EKRANI */}
-      <main>
-        {activeTab === 'calendar' && <AppointmentCalendar />}
+      {/* İÇERİK ALANI */}
+      <div style={{ padding: '20px' }}>
         {activeTab === 'appointments' && <AppointmentManagement />}
-        {activeTab === 'customers' && <CustomerManagement />}
-        {activeTab === 'services' && <ServiceManagement />}
         {activeTab === 'employees' && <EmployeeManagement />}
-      </main>
+        {activeTab === 'definitions' && <DefinitionsManagement />}
+      </div>
     </div>
   );
 }
 
-export default App;
+export default App;y
