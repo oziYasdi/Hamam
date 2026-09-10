@@ -16,15 +16,18 @@ app.get('/api/health', (req, res) => {
 // --- MÜŞTERİ API ROTALARI ---
 
 // 1. Tüm Müşterileri Listele (GET)
+// --- CUSTOMERS (MÜŞTERİLER) ROTASI ---
 app.get('/api/customers', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM customers ORDER BY id DESC');
-    res.json(result.rows);
+    const customers = await db.query('SELECT * FROM customers ORDER BY id DESC');
+    res.json(customers.rows);
   } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Müşteriler alınırken hata oluştu.' });
+    console.error('Müşteri Çekme Hatası:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
+
+
 
 // 2. Yeni Müşteri Ekle (POST)
 app.post('/api/customers', async (req, res) => {
@@ -159,6 +162,18 @@ app.post('/api/products', async (req, res) => {
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Ürün eklenirken hata oluştu.' });
+  }
+});
+
+
+// --- 1. HİZMETLERİ GETİR ---
+app.get('/api/services', async (req, res) => {
+  try {
+    const services = await db.query('SELECT * FROM services WHERE is_active = true ORDER BY name ASC');
+    res.json(services.rows);
+  } catch (err) {
+    console.error('Hizmetler Çekilirken Hata:', err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -565,6 +580,190 @@ app.patch('/api/currencies/:id/rate', async (req, res) => {
     res.status(500).json({ error: 'Döviz kuru güncellenirken hata oluştu.' });
   }
 });
+
+
+
+// --- APPOINTMENTS (RANDEVULAR) LISTELEME ---
+app.get('/api/appointments', async (req, res) => {
+  try {
+    const appointments = await db.query(`
+      SELECT 
+        a.id,
+        a.start_time AS appointment_date,
+        a.start_time,
+        a.end_time,
+        a.status,
+        a.total_price,
+        a.notes,
+        c.first_name AS customer_first_name,
+        c.last_name AS customer_last_name,
+        COALESCE(e.first_name, 'Atanmadı') AS employee_first_name,
+        COALESCE(e.last_name, '') AS employee_last_name,
+        s.name AS service_name,
+        s.duration_minutes,
+        s.currency
+      FROM appointments a
+      LEFT JOIN customers c ON a.customer_id = c.id
+      LEFT JOIN services s ON a.service_id = s.id
+      LEFT JOIN employees e ON a.employee_id = e.id
+      ORDER BY a.start_time DESC
+    `);
+    res.json(appointments.rows);
+  } catch (err) {
+    console.error('Randevular Çekilirken Hata:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+// --- 3. YENİ RANDEVU EKLE ---// --- APPOINTMENTS YENİ EKLENME (POST) ---
+app.post('/api/appointments', async (req, res) => {
+  try {
+    const { customer_id, service_id, employee_id, appointment_date, total_price, notes } = req.body;
+
+    // Hizmet süresini veritabanından çekip bitiş saatini hesaplayalım
+    const serviceRes = await db.query('SELECT duration_minutes FROM services WHERE id = $1', [service_id]);
+    const duration = serviceRes.rows[0]?.duration_minutes || 60;
+
+    const startTime = new Date(appointment_date);
+    const endTime = new Date(startTime.getTime() + duration * 60000);
+
+    const newApp = await db.query(
+      `INSERT INTO appointments 
+       (customer_id, service_id, employee_id, start_time, end_time, total_price, notes, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'Bekliyor') 
+       RETURNING *`,
+      [
+        customer_id,
+        service_id,
+        employee_id || null,
+        startTime,
+        endTime,
+        total_price,
+        notes || ''
+      ]
+    );
+
+    res.json(newApp.rows[0]);
+  } catch (err) {
+    console.error('Randevu Oluşturma Hatası:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// --- APPOINTMENTS DURUM GÜNCELLEME (PATCH) ---
+app.patch('/api/appointments/:id/status', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    await db.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+    res.json({ message: 'Durum güncellendi' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+
+// --- ODA MATRIX & GÜNLÜK DURUMU GETİR ---
+app.get('/api/room-schedule', async (req, res) => {
+  try {
+    const { date } = req.query; // Örn: '2026-09-10'
+    const selectedDate = date || new Date().toISOString().split('T')[0];
+
+    // Odaları getir
+    const rooms = await db.query('SELECT * FROM rooms ORDER BY id ASC');
+    
+    // O güne ait tüm oda kullanım kayıtlarını getir
+    const appointments = await db.query(`
+      SELECT 
+        ra.*,
+        r.name as room_name,
+        r.capacity as room_capacity,
+        s.name as service_name,
+        s.price as service_price,
+        COALESCE(c.first_name || ' ' || c.last_name, ra.new_customer_name, 'Misafir') as customer_fullname,
+        COALESCE(e.first_name || ' ' || e.last_name, 'Atanmadı') as employee_fullname,
+        COALESCE((SELECT SUM(total_price) FROM room_orders WHERE room_appointment_id = ra.id), 0) as total_orders_amount
+      FROM room_appointments ra
+      JOIN rooms r ON ra.room_id = r.id
+      LEFT JOIN services s ON ra.service_id = s.id
+      LEFT JOIN customers c ON ra.customer_id = c.id
+      LEFT JOIN employees e ON ra.employee_id = e.id
+      WHERE DATE(ra.start_time) = $1
+      ORDER BY ra.start_time ASC
+    `, [selectedDate]);
+
+    res.json({
+      rooms: rooms.rows,
+      appointments: appointments.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ODAYA KAYIT/GİRİŞ YAPMA ---
+app.post('/api/room-appointments', async (req, res) => {
+  try {
+    const { room_id, customer_id, new_customer_name, service_id, employee_id, start_time, duration_minutes, guest_count, notes } = req.body;
+
+    // 1. Oda Kapasite Kontrolü
+    const roomRes = await db.query('SELECT capacity FROM rooms WHERE id = $1', [room_id]);
+    if (roomRes.rows.length === 0) return res.status(400).json({ error: 'Oda bulunamadı.' });
+    
+    if (guest_count > roomRes.rows[0].capacity) {
+      return res.status(400).json({ error: `Oda kapasitesi aşamazsınız! Maksimum kapasite: ${roomRes.rows[0].capacity}` });
+    }
+
+    // 2. Kaydet
+    const newRecord = await db.query(`
+      INSERT INTO room_appointments 
+      (room_id, customer_id, new_customer_name, service_id, employee_id, start_time, duration_minutes, guest_count, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [room_id, customer_id || null, new_customer_name || null, service_id, employee_id || null, start_time, duration_minutes, guest_count, notes]);
+
+    res.json(newRecord.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ODAYA YEMEK / İÇECEK / ADİSYON EKLEME ---
+app.post('/api/room-orders', async (req, res) => {
+  try {
+    const { room_appointment_id, product_id, quantity } = req.body;
+
+    // Ürün fiyatını çek
+    const productRes = await db.query('SELECT price FROM products WHERE id = $1', [product_id]);
+    if (productRes.rows.length === 0) return res.status(400).json({ error: 'Ürün bulunamadı.' });
+    
+    const unit_price = productRes.rows[0].price;
+    const total_price = unit_price * quantity;
+
+    const newOrder = await db.query(`
+      INSERT INTO room_orders (room_appointment_id, product_id, quantity, unit_price, total_price)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [room_appointment_id, product_id, quantity, unit_price, total_price]);
+
+    res.json(newOrder.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+
+
 
 const PORT = process.env.PORT || 5000;
 
