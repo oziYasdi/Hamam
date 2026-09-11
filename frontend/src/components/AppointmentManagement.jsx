@@ -145,7 +145,7 @@ const AppointmentManagement = () => {
               >
                 <option value="">-- Personel Seçin (İsteğe Bağlı) --</option>
                 {employees.map(e => (
-                  <option key={e.id} value={e.id}>{e.first_name} {e.last_name} ({e.role})</option>
+                  <option key={e.id} value={e.id}>{e.name || `${e.first_name || ''} ${e.last_name || ''}`}</option>
                 ))}
               </select>
             </div>
@@ -182,7 +182,7 @@ const AppointmentManagement = () => {
                 name="notes"
                 value={formData.notes}
                 onChange={handleChange}
-                placeholder="Örn: Müşteri hassas ciltli, orta sıcaklık istedi"
+                placeholder="Örn: Müşteri hassas ciltli"
                 style={{ width: '100%', padding: '8px', marginTop: '4px' }}
               />
             </div>
@@ -190,13 +190,8 @@ const AppointmentManagement = () => {
             <button
               type="submit"
               style={{
-                background: '#2563eb',
-                color: '#fff',
-                border: 'none',
-                padding: '10px',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontWeight: 'bold'
+                background: '#2563eb', color: '#fff', border: 'none', padding: '10px',
+                borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'
               }}
             >
               Randevuyu Kaydet
@@ -233,15 +228,11 @@ const AppointmentManagement = () => {
                     </td>
                     <td><strong>{app.customer_first_name} {app.customer_last_name}</strong></td>
                     <td>{app.service_name} ({app.duration_minutes} dk)</td>
-                    <td>{app.employee_first_name ? `${app.employee_first_name} ${app.employee_last_name}` : <em style={{color:'#666'}}>Atanmadı</em>}</td>
+                    <td>{app.employee_first_name}</td>
                     <td>{app.total_price} {app.currency === 'EUR' ? '€' : app.currency === 'USD' ? '$' : '₺'}</td>
                     <td>
                       <span style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontWeight: 'bold',
-                        fontSize: '12px',
-                        color: '#fff',
+                        padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px', color: '#fff',
                         backgroundColor: 
                           app.status === 'Tamamlandi' ? '#16a34a' :
                           app.status === 'Onaylandi' ? '#2563eb' :

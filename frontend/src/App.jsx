@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Calendar, Users, Settings } from 'lucide-react';
 import AppointmentManagement from './components/AppointmentManagement';
-import EmployeeManagement from './components/EmployeeManagement';
 import DefinitionsManagement from "./components/DefinitionsManagement";
+import RoomGridMatrix from "./components/RoomGridMatrix"; 
 
 function App() {
   // Aktif sekmeyi takip etmek için state tanımı
@@ -36,17 +36,19 @@ function App() {
             <Calendar size={18} /> Randevu Listesi
           </button>
 
+
           <button
-            onClick={() => setActiveTab('employees')}
+            onClick={() => setActiveTab('rooms')}
             style={{
               display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '6px',
               border: 'none', cursor: 'pointer', fontWeight: 'bold',
-              backgroundColor: activeTab === 'employees' ? '#2563eb' : 'transparent',
+              backgroundColor: activeTab === 'rooms' ? '#2563eb' : 'transparent',
               color: '#fff'
             }}
           >
-            <Users size={18} /> Personeller
+            <Calendar size={18} /> Randevu Listesi
           </button>
+ 
 
           <button
             onClick={() => setActiveTab('definitions')}
@@ -65,11 +67,11 @@ function App() {
       {/* İÇERİK ALANI */}
       <div style={{ padding: '20px' }}>
         {activeTab === 'appointments' && <AppointmentManagement />}
-        {activeTab === 'employees' && <EmployeeManagement />}
         {activeTab === 'definitions' && <DefinitionsManagement />}
+        {activeTab === 'rooms' && <RoomGridMatrix />}
       </div>
     </div>
   );
 }
 
-export default App;y
+export default App;

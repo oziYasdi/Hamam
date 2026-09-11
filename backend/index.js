@@ -53,6 +53,20 @@ app.post('/api/customers', async (req, res) => {
 
 
 
+
+app.get('/api/product-categories', async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM product_categories');
+    res.json(rows);
+  } catch (error) {
+    console.error('Kategoriler çekilemedi:', error);
+    res.status(500).json({ error: 'Kategoriler yüklenemedi.' });
+  }
+});
+
+
+
+
 // --- ÜRÜN GRUP TANIMLARI API ROTALARI ---
 
 // 1. Tüm Ürün Gruplarını Listele (GET)
@@ -735,33 +749,133 @@ app.post('/api/room-appointments', async (req, res) => {
   }
 });
 
-// --- ODAYA YEMEK / İÇECEK / ADİSYON EKLEME ---
+
+
+
+// --- ADİSYONA YENİ ÜRÜN / SİPARİŞ EKLE ---
 app.post('/api/room-orders', async (req, res) => {
   try {
     const { room_appointment_id, product_id, quantity } = req.body;
 
     // Ürün fiyatını çek
     const productRes = await db.query('SELECT price FROM products WHERE id = $1', [product_id]);
-    if (productRes.rows.length === 0) return res.status(400).json({ error: 'Ürün bulunamadı.' });
-    
-    const unit_price = productRes.rows[0].price;
-    const total_price = unit_price * quantity;
+    if (productRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Ürün bulunamadı.' });
+    }
 
+    const unit_price = parseFloat(productRes.rows[0].price) || 0;
+    const qty = parseInt(quantity, 10) || 1;
+    const total_price = unit_price * qty;
+
+    // Siparişi kaydet
     const newOrder = await db.query(`
       INSERT INTO room_orders (room_appointment_id, product_id, quantity, unit_price, total_price)
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
-    `, [room_appointment_id, product_id, quantity, unit_price, total_price]);
+    `, [room_appointment_id, product_id, qty, unit_price, total_price]);
 
-    res.json(newOrder.rows[0]);
+    res.status(201).json(newOrder.rows[0]);
   } catch (err) {
+    console.error('Sipariş ekleme hatası:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+  // --- BELİRLİ BİR REZERVASYONA AİT ADİSYON SİPARİŞLERİNİ GETİR ---
+app.get('/api/room-orders/:appointment_id', async (req, res) => {
+  try {
+    const { appointment_id } = req.params;
+
+    const orders = await db.query(`
+      SELECT 
+        ro.id,
+        ro.product_id,
+        ro.quantity,
+        ro.unit_price,
+        ro.total_price,
+        p.name AS product_name
+      FROM room_orders ro
+      JOIN products p ON ro.product_id = p.id
+      WHERE ro.room_appointment_id = $1
+      ORDER BY ro.id ASC
+    `, [appointment_id]);
+
+    res.json(orders.rows);
+  } catch (err) {
+    console.error('Adisyon çekme hatası:', err.message);
+    res.status(500).json({ error: 'Adisyon siparişleri alınamadı.' });
+  }
+});
+
+app.post('/api/room-orders/bulk-save', async (req, res) => {
+  const { room_appointment_id, orders } = req.body;
+
+  if (!room_appointment_id) {
+    return res.status(400).json({ error: 'room_appointment_id parametresi eksik.' });
+  }
+
+  try {
+    // 1. Transaction Başlat
+    await db.query('BEGIN');
+
+    // 2. Bu randevuya ait eski adisyonları sil
+    await db.query(
+      'DELETE FROM room_orders WHERE room_appointment_id = $1',
+      [room_appointment_id]
+    );
+
+    // 3. Yeni siparişleri ekle
+    if (Array.isArray(orders) && orders.length > 0) {
+      for (const order of orders) {
+        const productId = order.product_id || order.id;
+        const quantity = parseInt(order.quantity, 10) || 1;
+        const unitPrice = parseFloat(order.unit_price || order.price) || 0;
+        const totalPrice = parseFloat(order.total_price) || (unitPrice * quantity);
+
+        if (!productId) continue;
+
+        await db.query(
+          `INSERT INTO room_orders (room_appointment_id, product_id, quantity, unit_price, total_price)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [room_appointment_id, productId, quantity, unitPrice, totalPrice]
+        );
+      }
+    }
+
+    // 4. Değişiklikleri Kaydet
+    await db.query('COMMIT');
+    res.status(200).json({ message: 'Adisyon başarıyla kaydedildi.' });
+
+  } catch (err) {
+    // Hata durumunda işlemleri geri al
+    await db.query('ROLLBACK');
+    console.error('Bulk Save Hatası:', err);
+    res.status(500).json({ error: 'Adisyon kaydedilemedi: ' + err.message });
   }
 });
 
 
 
 
+// --- REZERVASYON SİLME / İPTAL ENDPOINT'İ ---
+app.delete('/api/room-appointments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const appRes = await db.query('SELECT start_time FROM room_appointments WHERE id = $1', [id]);
+    if (appRes.rows.length === 0) return res.status(404).json({ error: 'Rezervasyon bulunamadı.' });
+
+    // 2. KURAL: Geçmişteki rezervasyonlar silinemez!
+    if (new Date(appRes.rows[0].start_time) < new Date()) {
+      return res.status(400).json({ error: 'Geçmişe ait rezervasyonlar silinemez veya değiştirilemez!' });
+    }
+
+    await db.query('DELETE FROM room_appointments WHERE id = $1', [id]);
+    res.json({ message: 'Rezervasyon iptal edildi.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 
