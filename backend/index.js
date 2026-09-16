@@ -54,40 +54,33 @@ app.post('/api/customers', async (req, res) => {
 
 
 
-app.get('/api/product-categories', async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT * FROM product_categories');
-    res.json(rows);
-  } catch (error) {
-    console.error('Kategoriler çekilemedi:', error);
-    res.status(500).json({ error: 'Kategoriler yüklenemedi.' });
-  }
-});
-
 
 
 
 // --- ÜRÜN GRUP TANIMLARI API ROTALARI ---
-
-// 1. Tüm Ürün Gruplarını Listele (GET)
+// 1. Tüm Ürün Gruplarını Listele (GET) - DÜZELTİLDİ
 app.get('/api/product-groups', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM product_groups ORDER BY display_order ASC, id ASC');
+    const result = await db.query('SELECT * FROM product_groups ORDER BY display_order ASC');
     res.json(result.rows);
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ error: 'Ürün grupları alınırken hata oluştu.' });
+    res.status(500).json({ error: 'Ürün grupları çekilirken hata oluştu.' });
   }
 });
 
+
+// 2. Yeni Ürün Grubu Ekle (POST)
 // 2. Yeni Ürün Grubu Ekle (POST)
 app.post('/api/product-groups', async (req, res) => {
   try {
-    const { name, display_order } = req.body;
+    const { name, display_order, is_appointment_service } = req.body;
+
     const newGroup = await db.query(
-      'INSERT INTO product_groups (name, display_order) VALUES ($1, $2) RETURNING *',
-      [name, display_order || 0]
+      'INSERT INTO product_groups (name, display_order, is_appointment_service) VALUES ($1, $2, $3) RETURNING *',
+      [name, display_order || 0, is_appointment_service ?? false]
     );
+
     res.status(201).json(newGroup.rows[0]);
   } catch (err) {
     console.error(err.message);
@@ -95,16 +88,16 @@ app.post('/api/product-groups', async (req, res) => {
   }
 });
 
-
+// 3. Ürün Grubunu Güncelle (PUT)
 // 3. Ürün Grubunu Güncelle (PUT)
 app.put('/api/product-groups/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, display_order, is_active } = req.body;
+    const { name, display_order, is_active, is_appointment_service } = req.body;
 
     const updatedGroup = await db.query(
-      'UPDATE product_groups SET name = $1, display_order = $2, is_active = $3 WHERE id = $4 RETURNING *',
-      [name, display_order || 0, is_active ?? true, id]
+      'UPDATE product_groups SET name = $1, display_order = $2, is_active = $3, is_appointment_service = $4 WHERE id = $5 RETURNING *',
+      [name, display_order || 0, is_active ?? true, is_appointment_service ?? false, id]
     );
 
     if (updatedGroup.rows.length === 0) {
@@ -117,7 +110,6 @@ app.put('/api/product-groups/:id', async (req, res) => {
     res.status(500).json({ error: 'Ürün grubu güncellenirken hata oluştu.' });
   }
 });
-
 // 4. Ürün Grubunu Sil (DELETE)
 app.delete('/api/product-groups/:id', async (req, res) => {
   try {
@@ -629,8 +621,22 @@ app.get('/api/appointments', async (req, res) => {
   }
 });
 
-
-
+// Randevu/Oda açılış modalları için sadece randevuda listelenebilir ürünleri getirir
+app.get('/api/appointment-services', async (req, res) => {
+  try {
+    const query = `
+      SELECT p.*, g.name as group_name 
+      FROM products p
+      INNER JOIN product_groups g ON p.group_id = g.id
+      WHERE g.is_appointment_service = true
+      ORDER BY p.name ASC
+    `;
+    const result = await db.query(query);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // --- 3. YENİ RANDEVU EKLE ---// --- APPOINTMENTS YENİ EKLENME (POST) ---
 app.post('/api/appointments', async (req, res) => {
@@ -856,27 +862,73 @@ app.post('/api/room-orders/bulk-save', async (req, res) => {
 
 
 
-
-// --- REZERVASYON SİLME / İPTAL ENDPOINT'İ ---
-app.delete('/api/room-appointments/:id', async (req, res) => {
+// Backend DELETE Endpoint Örneği
+app.delete('/api/appointments/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    
+    // Silinecek randevuyu veritabanından çekin
+    const app = await db.query('SELECT * FROM appointments WHERE id = $1', [id]);
+    if (app.rows.length === 0) return res.status(404).json({ error: 'Rezervasyon bulunamadı.' });
 
-    const appRes = await db.query('SELECT start_time FROM room_appointments WHERE id = $1', [id]);
-    if (appRes.rows.length === 0) return res.status(404).json({ error: 'Rezervasyon bulunamadı.' });
+    // BACKEND TARİH KONTROLÜ DÜZELTMESİ:
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-    // 2. KURAL: Geçmişteki rezervasyonlar silinemez!
-    if (new Date(appRes.rows[0].start_time) < new Date()) {
-      return res.status(400).json({ error: 'Geçmişe ait rezervasyonlar silinemez veya değiştirilemez!' });
+    const appDate = new Date(app.rows[0].appointment_date);
+    appDate.setHours(0, 0, 0, 0);
+
+    if (appDate < today) {
+      return res.status(400).json({ error: 'Geçmiş günlere ait rezervasyonlar silinemez!' });
     }
 
-    await db.query('DELETE FROM room_appointments WHERE id = $1', [id]);
-    res.json({ message: 'Rezervasyon iptal edildi.' });
+    // Silme işlemini gerçekleştirin
+    await db.query('DELETE FROM appointments WHERE id = $1', [id]);
+    res.json({ message: 'Rezervasyon silindi.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+
+
+// --- REZERVASYON SİLME / İPTAL ENDPOINT'İ ---
+// Oda Rezervasyonu Silme Endpoint'i (/api/room-appointments/:id)
+app.delete('/api/room-appointments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Silinecek oda randevusunu room_appointments tablosundan çekin
+    const app = await db.query('SELECT * FROM room_appointments WHERE id = $1', [id]);
+    
+    if (app.rows.length === 0) {
+      return res.status(404).json({ error: 'Oda rezervasyonu bulunamadı.' });
+    }
+
+    // 2. Geçmiş gün kontrolü (Tarih formatı: appointment_date veya date)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const rawDate = app.rows[0].appointment_date || app.rows[0].date;
+    const appDate = new Date(rawDate);
+    appDate.setHours(0, 0, 0, 0);
+
+    if (appDate < today) {
+      return res.status(400).json({ error: 'Geçmiş günlere ait oda rezervasyonları silinemez!' });
+    }
+
+    // 3. İsteğe bağlı: Varsa bu oda randevusuna ait adisyon/siparişleri temizle
+    await db.query('DELETE FROM room_orders WHERE room_appointment_id = $1', [id]);
+
+    // 4. Oda randevusunu sil
+    await db.query('DELETE FROM room_appointments WHERE id = $1', [id]);
+
+    res.json({ message: 'Oda rezervasyonu başarıyla silindi.' });
+  } catch (err) {
+    console.error("Delete room appointment error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 const PORT = process.env.PORT || 5000;
