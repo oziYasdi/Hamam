@@ -51,7 +51,9 @@ const RoomGridMatrix = () => {
 
   const [error, setError] = useState("");
 
-  const fetchMatrixData = async () => {
+  /*
+ 
+  const fetchMatrixDataaaa = async () => {
     try {
       const [matrixRes, custRes, servRes, empRes, prodRes, catRes] =
         await Promise.all([
@@ -92,10 +94,210 @@ const RoomGridMatrix = () => {
       console.error("Matris verisi çekilemedi:", err);
     }
   };
+*/
+
+  const [appointmentServices, setAppointmentServices] = useState([]);
+  const [selectedServiceId, setSelectedServiceId] = useState("");
 
   useEffect(() => {
     fetchMatrixData();
   }, [selectedDate]);
+
+  // Takvim Modal'ı için Randevu Hizmetlerini Çeken Fonksiyon
+  // 1. Randevu Hizmetlerini Çeken Fonksiyon (Supabase)
+  //
+  /*
+  const fetchAppointmentServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("products")
+        .select(
+          `
+          id,
+          name,
+          price,
+          currency,
+          duration_minutes,
+          is_active,
+          product_groups!inner (
+            id,
+            name,
+            is_appointment_service,
+            is_active
+          )
+        `,
+        )
+        .eq("is_active", true)
+        .eq("product_groups.is_appointment_service", true)
+        .eq("product_groups.is_active", true);
+
+      if (error) {
+        console.error("Hizmetler çekilirken hata oluştu:", error);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error("Supabase bağlantı hatası:", err);
+      return [];
+    }
+  };
+  
+  */
+
+  // 2. Ana Veri Yükleme Fonksiyonu
+  //
+  /*
+  const fetchMatrixData = async () => {
+    // ODA & TAKVİM MATRİSİ
+    axios
+      .get(`http://localhost:5000/api/room-schedule?date=${selectedDate}`)
+      .then((res) => {
+        setRooms(res.data.rooms || []);
+        setAppointments(res.data.appointments || []);
+      })
+      .catch((err) => console.error("Matris Hatası:", err));
+
+    // MÜŞTERİLER
+    axios
+      .get("http://localhost:5000/api/customers")
+      .then((res) => setCustomers(res.data || []))
+      .catch((err) => console.error("Müşteri Hatası:", err));
+
+    // PERSONELLER (Filtreyi esnetip veriyi garantiye alıyoruz)
+    axios
+      .get("http://localhost:5000/api/employees")
+      .then((res) => {
+        const empData = res.data || [];
+        // is_active alanı kontrolü
+        const activeEmps = empData.filter((e) => e.is_active !== false);
+        setEmployees(activeEmps.length > 0 ? activeEmps : empData);
+      })
+      .catch((err) => console.error("Personel Hatası:", err));
+
+    // HİZMETLER (Supabase)
+    fetchAppointmentServices().then((data) => {
+      setAppointmentServices(data);
+    });
+  };
+  
+  */
+  /*
+  const fetchMatrixData = async () => {
+    // Matris verileri
+    axios
+      .get(`http://localhost:5000/api/room-schedule?date=${selectedDate}`)
+      .then((res) => {
+        setRooms(res.data.rooms || []);
+        setAppointments(res.data.appointments || []);
+      })
+      .catch((err) => console.error("Matris Hatası:", err));
+
+    // Müşteriler (Burası çalıştığı için listede görünüyor)
+    axios
+      .get("http://localhost:5000/api/customers")
+      .then((res) => setCustomers(res.data || []))
+      .catch((err) => console.error("Müşteri Hatası:", err));
+
+    // Personeller
+    axios
+      .get("http://localhost:5000/api/employees")
+      .then((res) => setEmployees(res.data || []))
+      .catch((err) => console.error("Personel Hatası:", err));
+
+    // HİZMETLER / ÜRÜNLER (Backend'den çekip doğrudan state'e atıyoruz)
+    axios
+      .get("http://localhost:5000/api/products")
+      .then((res) => {
+        console.log("Frontend'e gelen hizmetler:", res.data); // F12 Konsolunda veriyi doğrulayın
+        setAppointmentServices(res.data || []);
+      })
+      .catch((err) => console.error("Hizmet Çekme Hatası:", err));
+  };
+*/
+
+  // 2. Ana Veri Yükleme Fonksiyonu
+  const fetchMatrixData = async () => {
+    // Matris verileri
+    axios
+      .get(`http://localhost:5000/api/room-schedule?date=${selectedDate}`)
+      .then((res) => {
+        setRooms(res.data.rooms || []);
+        setAppointments(res.data.appointments || []);
+      })
+      .catch((err) => console.error("Matris Hatası:", err));
+
+    // Müşteriler
+    axios
+      .get("http://localhost:5000/api/customers")
+      .then((res) => setCustomers(res.data || []))
+      .catch((err) => console.error("Müşteri Hatası:", err));
+
+    // Personeller
+    axios
+      .get("http://localhost:5000/api/employees")
+      .then((res) => setEmployees(res.data || []))
+      .catch((err) => console.error("Personel Hatası:", err));
+
+    // Hizmetler
+    fetchAppointmentServices().then((data) => {
+      setAppointmentServices(data);
+    });
+  };
+
+  // 1. Supabase Hizmet Çekme (Esnek & Hata Korumalı)
+  const fetchAppointmentServices22 = async () => {
+    try {
+      if (!supabase) return [];
+
+      // Filtreleri sadeleştirerek verinin gelmesini garantiye alalım
+      const { data, error } = await supabase
+        .from("products")
+        .select(
+          `
+        id,
+        name,
+        price,
+        currency,
+        duration_minutes,
+        is_active
+      `,
+        )
+        .eq("is_active", true);
+
+      if (error) {
+        console.error("Supabase Hizmet Hatası:", error.message);
+        return [];
+      }
+      return data || [];
+    } catch (err) {
+      console.error("Supabase Bağlantı Hatası:", err);
+      return [];
+    }
+  };
+
+  // Randevu Hizmetlerini Backend Üzerinden Çeken Fonksiyon
+  //
+  /*
+  const fetchAppointmentServices = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/products");
+      return res.data || [];
+    } catch (err) {
+      console.error("Hizmetler backend'den çekilemedi:", err);
+      return [];
+    }
+  };
+*/
+
+  const fetchAppointmentServices = async () => {
+    try {
+      const res = await axios.get("http://localhost:5000/api/products");
+      return res.data || [];
+    } catch (err) {
+      console.error("Hizmetler çekilemedi:", err);
+      return [];
+    }
+  };
 
   // Boş Hücreye Tıklandığında
   // Boş Hücreye Tıklandığında
@@ -126,6 +328,24 @@ const RoomGridMatrix = () => {
     });
     setError("");
     setActiveModal("new");
+  };
+
+  // Service Seçildiğinde Otomatik Süre Ayarlama Handler'ı
+  // Hizmet Seçimi Handler'ı (Tür güvenliği sağlandı)
+  const handleServiceChange = (e) => {
+    const serviceId = e.target.value;
+
+    // Bulma işleminde string/number farkını eşitleyin
+    const selectedService = appointmentServices.find(
+      (s) => String(s.id) === String(serviceId),
+    );
+
+    setFormData((prev) => ({
+      ...prev,
+      service_id: serviceId,
+      duration_minutes:
+        selectedService?.duration_minutes || prev.duration_minutes || 60,
+    }));
   };
 
   // Dolu Hücreye Tıklandığında Adisyon Verileriyle Birlikte Paneli Aç
@@ -568,19 +788,17 @@ const RoomGridMatrix = () => {
                   style={inputStyle}
                 />
               )}
-
               <select
-                value={formData.service_id}
-                onChange={(e) =>
-                  setFormData({ ...formData, service_id: e.target.value })
-                }
+                value={formData.service_id || ""}
+                onChange={handleServiceChange}
                 required
-                style={inputStyle}
+                className="form-control"
               >
                 <option value="">-- Hizmet / İşlem Seçin --</option>
-                {services.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.price} ₺)
+                {appointmentServices.map((service) => (
+                  <option key={service.id} value={service.id}>
+                    {service.name} ({service.price} {service.currency || "TRY"})
+                    - {service.duration_minutes || 60} dk
                   </option>
                 ))}
               </select>

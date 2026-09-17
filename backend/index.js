@@ -137,24 +137,73 @@ app.delete('/api/product-groups/:id', async (req, res) => {
 
 // --- ÜRÜN TANIMLARI API ROTALARI ---
 
-// 1. Tüm Ürünleri Bağlı Olduğu Grup Adıyla Listele (GET)
+// Tüm Ürünleri / Hizmetleri Listele (GET)
+
+/*
 app.get('/api/products', async (req, res) => {
   try {
-    const queryText = `
-      SELECT 
-        p.*, 
-        pg.name AS group_name 
-      FROM products p
-      LEFT JOIN product_groups pg ON p.group_id = pg.id
+    const result = await db.query(`
+      SELECT p.*, g.name AS group_name 
+      FROM products p 
+      LEFT JOIN product_groups g ON p.group_id = g.id 
       ORDER BY p.id DESC
-    `;
-    const result = await db.query(queryText);
+    `);
     res.json(result.rows);
   } catch (err) {
     console.error(err.message);
-    res.status(500).json({ error: 'Ürünler alınırken hata oluştu.' });
+    res.status(500).json({ error: 'Ürünler yüklenemedi.' });
+  }
+});*/
+
+// GET: Randevu Hizmetlerini / Ürünleri Getir
+
+/*
+app.get('/api/products', async (req, res) => {
+  try {
+    const productsRes = await db.query(`
+      SELECT p.id, p.name, p.price, p.currency, p.duration_minutes, p.is_active
+      FROM products p
+      INNER JOIN product_groups pg ON p.product_group_id = pg.id
+      WHERE p.is_active = true 
+        AND pg.is_appointment_service = true 
+        AND pg.is_active = true
+    `);
+    res.json(productsRes.rows);
+  } catch (err) {
+    console.error("Ürünler çekilirken hata:", err);
+    res.status(500).json({ error: err.message });
   }
 });
+
+*/
+
+// backend/index.js veya ilgili route dosyanız
+// GET: Sadece Randevu Hizmeti Olan Ürünleri Getir
+app.get('/api/products', async (req, res) => {
+  try {
+    const productsRes = await db.query(`
+      SELECT 
+        p.id, 
+        p.name, 
+        p.price, 
+        p.currency, 
+        p.duration_minutes, 
+        p.is_active
+      FROM products p
+      INNER JOIN product_groups pg ON p.group_id = pg.id
+      WHERE p.is_active = true 
+        AND pg.is_appointment_service = true 
+        AND pg.is_active = true
+      ORDER BY p.name ASC
+    `);
+    
+    res.json(productsRes.rows);
+  } catch (err) {
+    console.error("SQL Hatası:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // 2. Yeni Ürün Ekle (POST)
 app.post('/api/products', async (req, res) => {
@@ -729,6 +778,8 @@ app.get('/api/room-schedule', async (req, res) => {
 });
 
 // --- ODAYA KAYIT/GİRİŞ YAPMA ---
+// 
+/*
 app.post('/api/room-appointments', async (req, res) => {
   try {
     const { room_id, customer_id, new_customer_name, service_id, employee_id, start_time, duration_minutes, guest_count, notes } = req.body;
@@ -755,8 +806,58 @@ app.post('/api/room-appointments', async (req, res) => {
   }
 });
 
+*/
 
+// --- ODAYA KAYIT/GİRİŞ YAPMA ---
 
+app.post('/api/room-appointments', async (req, res) => {
+  try {
+    const { 
+      room_id, 
+      customer_id, 
+      new_customer_name, 
+      service_id, 
+      employee_id, 
+      start_time, 
+      duration_minutes, 
+      guest_count, 
+      notes 
+    } = req.body;
+
+    // 1. Oda Kapasite Kontrolü
+    const roomRes = await db.query('SELECT capacity FROM rooms WHERE id = $1', [room_id]);
+    if (roomRes.rows.length === 0) return res.status(400).json({ error: 'Oda bulunamadı.' });
+    
+    if (parseInt(guest_count) > roomRes.rows[0].capacity) {
+      return res.status(400).json({ 
+        error: `Oda kapasitesini aşamazsınız! Maksimum kapasite: ${roomRes.rows[0].capacity}` 
+      });
+    }
+
+    // 2. Kaydet (Boş değerlerin 'null' veya varsayılan gitmesini garanti et)
+    const newRecord = await db.query(`
+      INSERT INTO room_appointments 
+      (room_id, customer_id, new_customer_name, service_id, employee_id, start_time, duration_minutes, guest_count, notes)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `, [
+      room_id, 
+      customer_id || null, 
+      new_customer_name || null, 
+      service_id, 
+      employee_id || null, 
+      start_time, 
+      parseInt(duration_minutes) || 60, 
+      parseInt(guest_count) || 1, 
+      notes || null
+    ]);
+
+    res.json(newRecord.rows[0]);
+  } catch (err) {
+    console.error("DB Insert Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // --- ADİSYONA YENİ ÜRÜN / SİPARİŞ EKLE ---
 app.post('/api/room-orders', async (req, res) => {

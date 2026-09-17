@@ -30,9 +30,6 @@ const DefinitionsManagement = () => {
   const [editingProfId, setEditingProfId] = useState(null);
   const [editingRoomId, setEditingRoomId] = useState(null);
 
-
-
-
   // Form State'i
   const [groupForm, setGroupForm] = useState({
     name: "",
@@ -775,7 +772,7 @@ const DefinitionsManagement = () => {
               </label>
               <input
                 type="number"
-                value={productForm.duration_minutes}
+                value={productForm.duration_minutes || ""}
                 onChange={(e) =>
                   setProductForm({
                     ...productForm,
@@ -849,6 +846,7 @@ const DefinitionsManagement = () => {
             </div>
           </form>
 
+          {/* --- DÜZELTİLEN ÜRÜNLER TABLOSU --- */}
           <table
             border="1"
             cellPadding="10"
@@ -860,54 +858,59 @@ const DefinitionsManagement = () => {
           >
             <thead>
               <tr style={{ background: "#0f172a", color: "#fff" }}>
-                <th>Sıra</th>
-                <th>Grup Adı</th>
-                <th>Randevu Hizmeti</th>
+                <th>Grup</th>
+                <th>Ürün / Hizmet Adı</th>
+                <th>Fiyat</th>
+                <th>Süre</th>
                 <th>Durum</th>
                 <th>İşlemler</th>
               </tr>
             </thead>
             <tbody>
-              {productGroups.map((g) => (
-                <tr key={g.id}>
-                  <td>{g.display_order}</td>
-                  <td>
-                    <strong>{g.name}</strong>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        background: g.is_appointment_service
-                          ? "#e0f2fe"
-                          : "#f1f5f9",
-                        color: g.is_appointment_service ? "#0369a1" : "#64748b",
-                      }}
-                    >
-                      {g.is_appointment_service ? "Evet" : "Hayır"}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        color: g.is_active ? "green" : "red",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {g.is_active ? "Aktif" : "Pasif"}
-                    </span>
-                  </td>
-                  <td style={{ display: "flex", gap: "8px" }}>
-                    <button onClick={() => handleEditGroupClick(g)}>
-                      Düzenle
-                    </button>
-                    <button onClick={() => handleDeleteGroup(g.id)}>Sil</button>
+              {products.length === 0 ? (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: "center" }}>
+                    Henüz tanımlanmış ürün bulunamadı.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                products.map((p) => {
+                  // Ürünün grup adını bulma
+                  const group = productGroups.find((g) => g.id === p.group_id);
+                  return (
+                    <tr key={p.id}>
+                      <td>{group ? group.name : p.group_name || "-"}</td>
+                      <td>
+                        <strong>{p.name}</strong>
+                      </td>
+                      <td>
+                        {p.price} {p.currency || "TRY"}
+                      </td>
+                      <td>
+                        {p.duration_minutes ? `${p.duration_minutes} dk` : "-"}
+                      </td>
+                      <td>
+                        <span
+                          style={{
+                            color: p.is_active ? "green" : "red",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {p.is_active ? "Aktif" : "Pasif"}
+                        </span>
+                      </td>
+                      <td style={{ display: "flex", gap: "8px" }}>
+                        <button onClick={() => handleEditProductClick(p)}>
+                          Düzenle
+                        </button>
+                        <button onClick={() => handleDeleteProduct(p.id)}>
+                          Sil
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

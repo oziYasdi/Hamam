@@ -1,12 +1,12 @@
 import React, { useState } from "react";
-import { Calendar, Users, Settings } from "lucide-react";
+import { Calendar, LayoutGrid, Settings } from "lucide-react";
 import AppointmentManagement from "./components/AppointmentManagement";
 import DefinitionsManagement from "./components/DefinitionsManagement";
 import RoomGridMatrix from "./components/RoomGridMatrix";
 
 function App() {
-  // Aktif sekmeyi takip etmek için state tanımı
-  const [activeTab, setActiveTab] = useState("appointments");
+  // Varsayılan sekmeyi takvimli matris ekranı (rooms) yapıyoruz
+  const [activeTab, setActiveTab] = useState("rooms");
 
   return (
     <div style={{ fontFamily: "Arial, sans-serif" }}>
@@ -17,7 +17,7 @@ function App() {
           padding: "15px 30px",
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "Space-between",
           color: "#fff",
         }}
       >
@@ -26,25 +26,6 @@ function App() {
         </h1>
 
         <div style={{ display: "flex", gap: "10px" }}>
-          <button
-            onClick={() => setActiveTab("appointments")}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "8px 16px",
-              borderRadius: "6px",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: "bold",
-              backgroundColor:
-                activeTab === "appointments" ? "#2563eb" : "transparent",
-              color: "#fff",
-            }}
-          >
-            <Calendar size={18} /> Randevu Listesi
-          </button>
-
           <button
             onClick={() => setActiveTab("rooms")}
             style={{
@@ -61,7 +42,26 @@ function App() {
               color: "#fff",
             }}
           >
-            <Calendar size={18} /> Randevu Listesi
+            <LayoutGrid size={18} /> Oda & Takvim Matrisi
+          </button>
+
+          <button
+            onClick={() => setActiveTab("appointments")}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 16px",
+              borderRadius: "6px",
+              border: "none",
+              cursor: "pointer",
+              fontWeight: "bold",
+              backgroundColor:
+                activeTab === "appointments" ? "#2563eb" : "transparent",
+              color: "#fff",
+            }}
+          >
+            <Calendar size={18} /> Liste Görünümü
           </button>
 
           <button
@@ -87,9 +87,9 @@ function App() {
 
       {/* İÇERİK ALANI */}
       <div style={{ padding: "20px" }}>
+        {activeTab === "rooms" && <RoomGridMatrix />}
         {activeTab === "appointments" && <AppointmentManagement />}
         {activeTab === "definitions" && <DefinitionsManagement />}
-        {activeTab === "rooms" && <RoomGridMatrix />}
       </div>
     </div>
   );
