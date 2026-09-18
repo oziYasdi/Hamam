@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
 require('dotenv').config();
 const db = require('./db');
+const { syncTcmbRates, getLatestRates, ensureExchangeRatesTable } = require('./tcmb');
 
 const app = express();
 
@@ -58,10 +60,16 @@ app.post('/api/customers', async (req, res) => {
 
 
 // --- ÜRÜN GRUP TANIMLARI API ROTALARI ---
-// 1. Tüm Ürün Gruplarını Listele (GET) - DÜZELTİLDİ
+// 1. Ürün Gruplarını Listele (GET)
+// ?active=true → yalnızca is_active = true olanlar (POS / rezervasyon)
 app.get('/api/product-groups', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM product_groups ORDER BY display_order ASC');
+    const onlyActive = req.query.active === 'true';
+    const result = await db.query(
+      onlyActive
+        ? 'SELECT * FROM product_groups WHERE is_active = true ORDER BY display_order ASC, name ASC'
+        : 'SELECT * FROM product_groups ORDER BY display_order ASC, name ASC'
+    );
     res.json(result.rows);
   } catch (err) {
     console.error(err.message);
@@ -136,70 +144,51 @@ app.delete('/api/product-groups/:id', async (req, res) => {
 
 
 // --- ÜRÜN TANIMLARI API ROTALARI ---
-
-// Tüm Ürünleri / Hizmetleri Listele (GET)
-
-/*
+// GET /api/products
+// ?active=true  → yalnızca aktif ürünler (ve aktif grup)
+// ?group_id=N   → seçilen grubun ürünleri (POS sol sütun)
 app.get('/api/products', async (req, res) => {
   try {
-    const result = await db.query(`
-      SELECT p.*, g.name AS group_name 
-      FROM products p 
-      LEFT JOIN product_groups g ON p.group_id = g.id 
-      ORDER BY p.id DESC
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).json({ error: 'Ürünler yüklenemedi.' });
-  }
-});*/
+    const { group_id, active } = req.query;
+    const conditions = [];
+    const params = [];
 
-// GET: Randevu Hizmetlerini / Ürünleri Getir
+    if (group_id) {
+      params.push(parseInt(group_id, 10));
+      conditions.push(`p.group_id = $${params.length}`);
+    }
 
-/*
-app.get('/api/products', async (req, res) => {
-  try {
-    const productsRes = await db.query(`
-      SELECT p.id, p.name, p.price, p.currency, p.duration_minutes, p.is_active
+    if (active === 'true') {
+      conditions.push('p.is_active = true');
+      conditions.push('g.is_active = true');
+    }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const productsRes = await db.query(
+      `
+      SELECT
+        p.id,
+        p.group_id,
+        p.name,
+        p.price,
+        p.currency,
+        p.duration_minutes,
+        p.is_active,
+        p.created_at,
+        g.name AS group_name,
+        g.is_appointment_service
       FROM products p
-      INNER JOIN product_groups pg ON p.product_group_id = pg.id
-      WHERE p.is_active = true 
-        AND pg.is_appointment_service = true 
-        AND pg.is_active = true
-    `);
-    res.json(productsRes.rows);
-  } catch (err) {
-    console.error("Ürünler çekilirken hata:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-*/
-
-// backend/index.js veya ilgili route dosyanız
-// GET: Sadece Randevu Hizmeti Olan Ürünleri Getir
-app.get('/api/products', async (req, res) => {
-  try {
-    const productsRes = await db.query(`
-      SELECT 
-        p.id, 
-        p.name, 
-        p.price, 
-        p.currency, 
-        p.duration_minutes, 
-        p.is_active
-      FROM products p
-      INNER JOIN product_groups pg ON p.group_id = pg.id
-      WHERE p.is_active = true 
-        AND pg.is_appointment_service = true 
-        AND pg.is_active = true
+      LEFT JOIN product_groups g ON p.group_id = g.id
+      ${where}
       ORDER BY p.name ASC
-    `);
-    
+      `,
+      params
+    );
+
     res.json(productsRes.rows);
   } catch (err) {
-    console.error("SQL Hatası:", err.message);
+    console.error('SQL Hatası:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -583,11 +572,47 @@ app.delete('/api/rooms/:id', async (req, res) => {
 // 1. Tüm Döviz Tanımlarını Listele (GET)
 app.get('/api/currencies', async (req, res) => {
   try {
-    const result = await db.query('SELECT * FROM currencies ORDER BY id ASC');
+    await ensureExchangeRatesTable(db);
+    const result = await db.query(`
+      SELECT
+        c.*,
+        COALESCE(latest.try_rate, c.exchange_rate) AS live_rate,
+        latest.rate_date
+      FROM currencies c
+      LEFT JOIN LATERAL (
+        SELECT try_rate, rate_date
+        FROM exchange_rates er
+        WHERE UPPER(er.currency_code) = UPPER(c.code)
+        ORDER BY rate_date DESC
+        LIMIT 1
+      ) latest ON true
+      ORDER BY c.id ASC
+    `);
     res.json(result.rows);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ error: 'Döviz tanımları alınırken hata oluştu.' });
+  }
+});
+
+app.get('/api/exchange-rates', async (req, res) => {
+  try {
+    const data = await getLatestRates(db);
+    res.json(data);
+  } catch (err) {
+    console.error('Kur okuma hatası:', err.message);
+    res.status(500).json({ error: 'Döviz kurları alınamadı.' });
+  }
+});
+
+app.post('/api/exchange-rates/sync', async (req, res) => {
+  try {
+    const result = await syncTcmbRates(db);
+    const latest = await getLatestRates(db);
+    res.json({ message: 'TCMB kurları güncellendi.', ...result, latest });
+  } catch (err) {
+    console.error('TCMB senkron hatası:', err.message);
+    res.status(502).json({ error: 'TCMB kurları çekilemedi: ' + err.message });
   }
 });
 
@@ -678,6 +703,8 @@ app.get('/api/appointment-services', async (req, res) => {
       FROM products p
       INNER JOIN product_groups g ON p.group_id = g.id
       WHERE g.is_appointment_service = true
+        AND g.is_active = true
+        AND p.is_active = true
       ORDER BY p.name ASC
     `;
     const result = await db.query(query);
@@ -756,12 +783,13 @@ app.get('/api/room-schedule', async (req, res) => {
         r.capacity as room_capacity,
         s.name as service_name,
         s.price as service_price,
+        COALESCE(s.currency, 'TRY') as service_currency,
         COALESCE(c.first_name || ' ' || c.last_name, ra.new_customer_name, 'Misafir') as customer_fullname,
         COALESCE(e.first_name || ' ' || e.last_name, 'Atanmadı') as employee_fullname,
         COALESCE((SELECT SUM(total_price) FROM room_orders WHERE room_appointment_id = ra.id), 0) as total_orders_amount
       FROM room_appointments ra
       JOIN rooms r ON ra.room_id = r.id
-      LEFT JOIN services s ON ra.service_id = s.id
+      LEFT JOIN products s ON ra.service_id = s.id
       LEFT JOIN customers c ON ra.customer_id = c.id
       LEFT JOIN employees e ON ra.employee_id = e.id
       WHERE DATE(ra.start_time) = $1
@@ -777,24 +805,52 @@ app.get('/api/room-schedule', async (req, res) => {
   }
 });
 
+const roomAppointmentListSql = `
+  SELECT
+    ra.*,
+    r.name as room_name,
+    r.capacity as room_capacity,
+    s.name as service_name,
+    s.price as service_price,
+    COALESCE(s.currency, 'TRY') as service_currency,
+    COALESCE(s.duration_minutes, ra.duration_minutes) as service_duration_minutes,
+    COALESCE(c.first_name || ' ' || c.last_name, ra.new_customer_name, 'Misafir') as customer_fullname,
+    c.first_name as customer_first_name,
+    c.last_name as customer_last_name,
+    c.phone as customer_phone,
+    COALESCE(e.first_name || ' ' || e.last_name, 'Atanmadı') as employee_fullname,
+    COALESCE((SELECT SUM(total_price) FROM room_orders WHERE room_appointment_id = ra.id), 0) as total_orders_amount
+  FROM room_appointments ra
+  JOIN rooms r ON ra.room_id = r.id
+  LEFT JOIN products s ON ra.service_id = s.id
+  LEFT JOIN customers c ON ra.customer_id = c.id
+  LEFT JOIN employees e ON ra.employee_id = e.id
+`;
+
+app.get('/api/room-appointments', async (req, res) => {
+  try {
+    const result = await db.query(`${roomAppointmentListSql} ORDER BY ra.start_time DESC`);
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Oda randevuları çekilirken hata:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- ODAYA KAYIT/GİRİŞ YAPMA ---
-// 
-/*
 app.post('/api/room-appointments', async (req, res) => {
   try {
     const { room_id, customer_id, new_customer_name, service_id, employee_id, start_time, duration_minutes, guest_count, notes } = req.body;
 
-    // 1. Oda Kapasite Kontrolü
     const roomRes = await db.query('SELECT capacity FROM rooms WHERE id = $1', [room_id]);
     if (roomRes.rows.length === 0) return res.status(400).json({ error: 'Oda bulunamadı.' });
-    
+
     if (guest_count > roomRes.rows[0].capacity) {
       return res.status(400).json({ error: `Oda kapasitesi aşamazsınız! Maksimum kapasite: ${roomRes.rows[0].capacity}` });
     }
 
-    // 2. Kaydet
     const newRecord = await db.query(`
-      INSERT INTO room_appointments 
+      INSERT INTO room_appointments
       (room_id, customer_id, new_customer_name, service_id, employee_id, start_time, duration_minutes, guest_count, notes)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
@@ -806,58 +862,128 @@ app.post('/api/room-appointments', async (req, res) => {
   }
 });
 
-*/
-
-// --- ODAYA KAYIT/GİRİŞ YAPMA ---
-
-app.post('/api/room-appointments', async (req, res) => {
+app.patch('/api/room-appointments/:id/status', async (req, res) => {
   try {
-    const { 
-      room_id, 
-      customer_id, 
-      new_customer_name, 
-      service_id, 
-      employee_id, 
-      start_time, 
-      duration_minutes, 
-      guest_count, 
-      notes 
-    } = req.body;
-
-    // 1. Oda Kapasite Kontrolü
-    const roomRes = await db.query('SELECT capacity FROM rooms WHERE id = $1', [room_id]);
-    if (roomRes.rows.length === 0) return res.status(400).json({ error: 'Oda bulunamadı.' });
-    
-    if (parseInt(guest_count) > roomRes.rows[0].capacity) {
-      return res.status(400).json({ 
-        error: `Oda kapasitesini aşamazsınız! Maksimum kapasite: ${roomRes.rows[0].capacity}` 
-      });
+    const { id } = req.params;
+    const { status } = req.body;
+    const updated = await db.query(
+      'UPDATE room_appointments SET status = $1 WHERE id = $2 RETURNING *',
+      [status, id]
+    );
+    if (updated.rows.length === 0) {
+      return res.status(404).json({ error: 'Randevu bulunamadı.' });
     }
-
-    // 2. Kaydet (Boş değerlerin 'null' veya varsayılan gitmesini garanti et)
-    const newRecord = await db.query(`
-      INSERT INTO room_appointments 
-      (room_id, customer_id, new_customer_name, service_id, employee_id, start_time, duration_minutes, guest_count, notes)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *
-    `, [
-      room_id, 
-      customer_id || null, 
-      new_customer_name || null, 
-      service_id, 
-      employee_id || null, 
-      start_time, 
-      parseInt(duration_minutes) || 60, 
-      parseInt(guest_count) || 1, 
-      notes || null
-    ]);
-
-    res.json(newRecord.rows[0]);
+    res.json(updated.rows[0]);
   } catch (err) {
-    console.error("DB Insert Error:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+app.patch('/api/room-appointments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      room_id,
+      customer_id,
+      new_customer_name,
+      service_id,
+      employee_id,
+      start_time,
+      duration_minutes,
+      guest_count,
+      notes,
+      status,
+    } = req.body;
+
+    const existing = await db.query('SELECT * FROM room_appointments WHERE id = $1', [id]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Randevu bulunamadı.' });
+    }
+
+    const current = existing.rows[0];
+    const nextRoomId = room_id ?? current.room_id;
+    const nextGuestCount = guest_count ?? current.guest_count;
+
+    if (nextRoomId) {
+      const roomRes = await db.query('SELECT capacity FROM rooms WHERE id = $1', [nextRoomId]);
+      if (roomRes.rows.length === 0) {
+        return res.status(400).json({ error: 'Oda bulunamadı.' });
+      }
+      if (nextGuestCount > roomRes.rows[0].capacity) {
+        return res.status(400).json({
+          error: `Oda kapasitesi aşamazsınız! Maksimum kapasite: ${roomRes.rows[0].capacity}`,
+        });
+      }
+    }
+
+    const updated = await db.query(
+      `UPDATE room_appointments SET
+        room_id = $1,
+        customer_id = $2,
+        new_customer_name = $3,
+        service_id = $4,
+        employee_id = $5,
+        start_time = $6,
+        duration_minutes = $7,
+        guest_count = $8,
+        notes = $9,
+        status = $10
+      WHERE id = $11
+      RETURNING *`,
+      [
+        nextRoomId,
+        customer_id === undefined ? current.customer_id : customer_id || null,
+        new_customer_name === undefined ? current.new_customer_name : new_customer_name || null,
+        service_id === undefined ? current.service_id : service_id,
+        employee_id === undefined ? current.employee_id : employee_id || null,
+        start_time === undefined ? current.start_time : start_time,
+        duration_minutes === undefined ? current.duration_minutes : duration_minutes,
+        nextGuestCount,
+        notes === undefined ? current.notes : notes,
+        status === undefined ? current.status : status,
+        id,
+      ]
+    );
+
+    res.json(updated.rows[0]);
+  } catch (err) {
+    console.error('Oda randevusu güncelleme hatası:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- ODAYA KAYIT/GİRİŞ YAPMA ---
+// Oda Adisyon/Randevu Detayını Getiren Endpoint
+app.get('/api/room-appointments/active/:roomId', async (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const query = `
+      SELECT 
+        ra.*,
+        p.name AS service_name,
+        p.price AS service_price,
+        p.currency AS service_currency,
+        e.name AS employee_name,
+        c.name AS customer_name
+      FROM room_appointments ra
+      LEFT JOIN products p ON ra.service_id = p.id
+      LEFT JOIN employees e ON ra.employee_id = e.id
+      LEFT JOIN customers c ON ra.customer_id = c.id
+      WHERE ra.room_id = $1 AND ra.status = 'active'
+      LIMIT 1
+    `;
+    const result = await db.query(query, [roomId]);
+    res.json(result.rows[0] || null);
+  } catch (err) {
+    console.error("Adisyon verisi çekilemedi:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+
+
 
 // --- ADİSYONA YENİ ÜRÜN / SİPARİŞ EKLE ---
 app.post('/api/room-orders', async (req, res) => {
@@ -900,7 +1026,8 @@ app.get('/api/room-orders/:appointment_id', async (req, res) => {
         ro.quantity,
         ro.unit_price,
         ro.total_price,
-        p.name AS product_name
+        p.name AS product_name,
+        COALESCE(p.currency, 'TRY') AS currency
       FROM room_orders ro
       JOIN products p ON ro.product_id = p.id
       WHERE ro.room_appointment_id = $1
@@ -1036,4 +1163,25 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Sunucu ${PORT} portunda çalışıyor...`);
+  syncTcmbRates(db)
+    .then((result) => {
+      console.log(`TCMB kurları yüklendi (${result.rateDate}, ${result.count} döviz).`);
+    })
+    .catch((err) => {
+      console.error('Başlangıç TCMB kur senkronu başarısız:', err.message);
+    });
 });
+
+cron.schedule(
+  '15 15 * * *',
+  () => {
+    syncTcmbRates(db)
+      .then((result) => {
+        console.log(`Günlük TCMB kurları güncellendi (${result.rateDate}).`);
+      })
+      .catch((err) => {
+        console.error('Günlük TCMB kur senkronu başarısız:', err.message);
+      });
+  },
+  { timezone: 'Europe/Istanbul' }
+);

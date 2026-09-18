@@ -13,24 +13,40 @@ import {
   RefreshCw,
 } from "lucide-react";
 import EmployeeManagement from "./EmployeeManagement";
+import {
+  Alert,
+  PageHeader,
+  SoftBadge,
+  StatusBadge,
+  btnDelete,
+  btnEdit,
+  btnPrimary,
+  btnSecondary,
+  btnSuccess,
+  cardClass,
+  cn,
+  fieldClass,
+  labelClass,
+  tableWrap,
+  tdClass,
+  thClass,
+} from "../ui.jsx";
+import { formatCurrency } from "../currency.js";
 
 const DefinitionsManagement = () => {
   const [activeSubTab, setActiveSubTab] = useState("product-groups");
 
-  // Listeler
   const [productGroups, setProductGroups] = useState([]);
   const [products, setProducts] = useState([]);
   const [professions, setProfessions] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [currencies, setCurrencies] = useState([]);
 
-  // Düzenleme Modu Seçili ID'leri
   const [editingGroupId, setEditingGroupId] = useState(null);
   const [editingProductId, setEditingProductId] = useState(null);
   const [editingProfId, setEditingProfId] = useState(null);
   const [editingRoomId, setEditingRoomId] = useState(null);
 
-  // Form State'i
   const [groupForm, setGroupForm] = useState({
     name: "",
     display_order: 0,
@@ -92,7 +108,6 @@ const DefinitionsManagement = () => {
     setTimeout(() => setMessage({ text: "", type: "" }), 3000);
   };
 
-  // Ürün Grubu İşlemleri
   const handleSaveGroup = async (e) => {
     e.preventDefault();
     try {
@@ -113,7 +128,6 @@ const DefinitionsManagement = () => {
     }
   };
 
-  // Düzenle Butonuna Tıklandığında
   const handleEditGroupClick = (group) => {
     setEditingGroupId(group.id);
     setGroupForm({
@@ -138,7 +152,6 @@ const DefinitionsManagement = () => {
       );
     }
   };
-  // Formu Sıfırlama
   const resetGroupForm = () => {
     setEditingGroupId(null);
     setGroupForm({
@@ -148,7 +161,6 @@ const DefinitionsManagement = () => {
       is_appointment_service: false,
     });
   };
-  // Ürün İşlemleri
   const handleSaveProduct = async (e) => {
     e.preventDefault();
     try {
@@ -205,7 +217,6 @@ const DefinitionsManagement = () => {
     });
   };
 
-  // Meslek İşlemleri (Ekle, Güncelle, Sil)
   const handleSaveProf = async (e) => {
     e.preventDefault();
     try {
@@ -255,20 +266,6 @@ const DefinitionsManagement = () => {
     setProfForm({ name: "", display_order: 0 });
   };
 
-  // Oda ve Döviz İşlemleri
-  const handleAddRoom = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post("http://localhost:5000/api/rooms", roomForm);
-      showMsg("Oda tanımı eklendi.");
-      setRoomForm({ name: "", capacity: 1, display_order: 0 });
-      fetchAllData();
-    } catch (err) {
-      showMsg(err.response?.data?.error || "Oda eklenemedi.", "error");
-    }
-  };
-
-  // Oda Kaydet / Güncelle Fonksiyonu
   const handleSaveRoom = async (e) => {
     e.preventDefault();
     try {
@@ -332,131 +329,71 @@ const DefinitionsManagement = () => {
     }
   };
 
-  const toggleRoomStatus = async (id, currentStatus) => {
-    try {
-      await axios.patch(`http://localhost:5000/api/rooms/${id}/status`, {
-        is_active: !currentStatus,
-      });
-      fetchAllData();
-    } catch (err) {
-      console.error("Oda durumu güncellenemedi:", err);
-    }
-  };
+  const tabs = [
+    { id: "product-groups", label: "Ürün Grupları", icon: Layers },
+    { id: "products", label: "Ürün Tanımları", icon: Package },
+    { id: "professions", label: "Meslek Tanımları", icon: Briefcase },
+    { id: "employees", label: "Personel Tanımları", icon: Users },
+    { id: "rooms", label: "Oda Tanımları", icon: DoorOpen },
+    { id: "currencies", label: "Döviz Tanımları", icon: Coins },
+  ];
+
+  const FormActions = ({ editing, onCancel }) => (
+    <div className="mt-2 flex gap-2">
+      <button
+        type="submit"
+        className={cn(editing ? btnSuccess : btnPrimary, "flex-1")}
+      >
+        {editing ? "Güncelle" : "Kaydet"}
+      </button>
+      {editing && (
+        <button type="button" onClick={onCancel} className={btnSecondary}>
+          Vazgeç
+        </button>
+      )}
+    </div>
+  );
 
   return (
-    <div
-      style={{
-        padding: "20px",
-        fontFamily: "Arial, sans-serif",
-        maxWidth: "1200px",
-        margin: "0 auto",
-      }}
-    >
-      <h2>⚙️ Sistem Tanımları (TANIMLAR)</h2>
+    <div>
+      <PageHeader
+        icon={Layers}
+        title="Sistem Tanımları"
+        subtitle="Ürün, oda, personel ve döviz kayıtlarını yönetin."
+      />
 
-      {message.text && (
-        <div
-          style={{
-            padding: "10px 15px",
-            borderRadius: "6px",
-            marginBottom: "15px",
-            fontWeight: "bold",
-            backgroundColor: message.type === "error" ? "#fef2f2" : "#f0fdf4",
-            color: message.type === "error" ? "#991b1b" : "#166534",
-            border: `1px solid ${message.type === "error" ? "#fecaca" : "#bbf7d0"}`,
-          }}
-        >
-          {message.text}
-        </div>
-      )}
+      <Alert type={message.type}>{message.text}</Alert>
 
-      {/* Alt Menü Tabları */}
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          borderBottom: "2px solid #e2e8f0",
-          paddingBottom: "10px",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-        }}
-      >
-        {[
-          {
-            id: "product-groups",
-            label: "Ürün Grupları",
-            icon: <Layers size={18} />,
-          },
-          {
-            id: "products",
-            label: "Ürün Tanımları",
-            icon: <Package size={18} />,
-          },
-          {
-            id: "professions",
-            label: "Meslek Tanımları",
-            icon: <Briefcase size={18} />,
-          },
-          {
-            id: "employees",
-            label: "Personel Tanımları",
-            icon: <Users size={18} />,
-          },
-          { id: "rooms", label: "Oda Tanımları", icon: <DoorOpen size={18} /> },
-          {
-            id: "currencies",
-            label: "Döviz Tanımları",
-            icon: <Coins size={18} />,
-          },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveSubTab(tab.id)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "10px 16px",
-              borderRadius: "6px",
-              border: "none",
-              cursor: "pointer",
-              fontWeight: "bold",
-              backgroundColor: activeSubTab === tab.id ? "#0f172a" : "#f1f5f9",
-              color: activeSubTab === tab.id ? "#fff" : "#475569",
-            }}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
+      <div className="mb-6 flex flex-wrap gap-1.5 rounded-full border border-slate-200/80 bg-white/70 p-1 shadow-sm backdrop-blur-md dark:border-slate-800 dark:bg-slate-900/60">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = activeSubTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveSubTab(tab.id)}
+              className={cn(
+                "flex items-center gap-2 rounded-full px-3.5 py-2 text-sm font-medium transition",
+                active
+                  ? "bg-slate-900 text-white shadow-sm dark:bg-amber-600"
+                  : "text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100",
+              )}
+            >
+              <Icon size={16} /> {tab.label}
+            </button>
+          );
+        })}
       </div>
 
-      {/* --- 1. ÜRÜN GRUPLARI TABI --- */}
       {activeSubTab === "product-groups" && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 2fr",
-            gap: "20px",
-          }}
-        >
-          <form
-            onSubmit={handleSaveGroup}
-            style={{
-              background: "#f8fafc",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-            }}
-          >
-            <h3>
-              {editingGroupId ? <RefreshCw size={18} /> : <Plus size={18} />}{" "}
+        <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
+          <form onSubmit={handleSaveGroup} className={cardClass}>
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
+              {editingGroupId ? <RefreshCw size={18} /> : <Plus size={18} />}
               {editingGroupId ? "Grup Düzenle" : "Yeni Ürün Grubu"}
             </h3>
-
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Grup Adı:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Grup Adı</label>
               <input
                 type="text"
                 value={groupForm.name}
@@ -464,15 +401,12 @@ const DefinitionsManagement = () => {
                   setGroupForm({ ...groupForm, name: e.target.value })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
                 placeholder="Örn: Masaj Çeşitleri"
               />
             </div>
-
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Sıra No:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Sıra No</label>
               <input
                 type="number"
                 value={groupForm.display_order}
@@ -482,19 +416,10 @@ const DefinitionsManagement = () => {
                     display_order: parseInt(e.target.value) || 0,
                   })
                 }
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
               />
             </div>
-
-            {/* --- EKLENEN YENİ CHECKBOX (Randevu Hizmeti) --- */}
-            <div
-              style={{
-                marginBottom: "15px",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
+            <label className="mb-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
               <input
                 type="checkbox"
                 id="grp_appointment_service"
@@ -505,28 +430,12 @@ const DefinitionsManagement = () => {
                     is_appointment_service: e.target.checked,
                   })
                 }
+                className="rounded border-slate-300 text-amber-600"
               />
-              <label
-                htmlFor="grp_appointment_service"
-                style={{
-                  fontSize: "13px",
-                  cursor: "pointer",
-                  fontWeight: "500",
-                }}
-              >
-                📅 Randevu Hizmeti Olarak Gösterilsin
-              </label>
-            </div>
-
+              Randevu hizmeti olarak gösterilsin
+            </label>
             {editingGroupId && (
-              <div
-                style={{
-                  marginBottom: "15px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                 <input
                   type="checkbox"
                   id="grp_active"
@@ -534,179 +443,82 @@ const DefinitionsManagement = () => {
                   onChange={(e) =>
                     setGroupForm({ ...groupForm, is_active: e.target.checked })
                   }
+                  className="rounded border-slate-300 text-amber-600"
                 />
-                <label
-                  htmlFor="grp_active"
-                  style={{ fontSize: "13px", cursor: "pointer" }}
-                >
-                  Aktif Durumda
-                </label>
-              </div>
+                Aktif durumda
+              </label>
             )}
-
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  background: editingGroupId ? "#059669" : "#2563eb",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                }}
-              >
-                {editingGroupId ? "Güncelle" : "Kaydet"}
-              </button>
-              {editingGroupId && (
-                <button
-                  type="button"
-                  onClick={resetGroupForm}
-                  style={{
-                    padding: "10px",
-                    background: "#64748b",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Vazgeç
-                </button>
-              )}
-            </div>
+            <FormActions editing={editingGroupId} onCancel={resetGroupForm} />
           </form>
 
-          <table
-            border="1"
-            cellPadding="10"
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "left",
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#0f172a", color: "#fff" }}>
-                <th>Sıra</th>
-                <th>Grup Adı</th>
-                <th>Randevu Hizmeti</th>
-                <th>Durum</th>
-                <th>İşlemler</th>
-              </tr>
-            </thead>
-            <tbody>
-              {productGroups.map((g) => (
-                <tr key={g.id}>
-                  <td>{g.display_order}</td>
-                  <td>
-                    <strong>{g.name}</strong>
-                  </td>
-                  {/* --- EKLENEN YENİ TABLO HÜCRESİ --- */}
-                  <td>
-                    <span
-                      style={{
-                        padding: "2px 8px",
-                        borderRadius: "12px",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                        background: g.is_appointment_service
-                          ? "#e0f2fe"
-                          : "#f1f5f9",
-                        color: g.is_appointment_service ? "#0369a1" : "#64748b",
-                      }}
-                    >
-                      {g.is_appointment_service ? "Evet" : "Hayır"}
-                    </span>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        color: g.is_active ? "green" : "red",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {g.is_active ? "Aktif" : "Pasif"}
-                    </span>
-                  </td>
-                  <td style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      onClick={() => handleEditGroupClick(g)}
-                      style={{
-                        padding: "4px 8px",
-                        background: "#eab308",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Edit2 size={14} /> Düzenle
-                    </button>
-                    <button
-                      onClick={() => handleDeleteGroup(g.id)}
-                      style={{
-                        padding: "4px 8px",
-                        background: "#dc2626",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Trash2 size={14} /> Sil
-                    </button>
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full text-left">
+              <thead className="bg-slate-50/90 dark:bg-slate-800/60">
+                <tr>
+                  <th className={thClass}>Sıra</th>
+                  <th className={thClass}>Grup Adı</th>
+                  <th className={thClass}>Randevu Hizmeti</th>
+                  <th className={thClass}>Durum</th>
+                  <th className={thClass}>İşlemler</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {productGroups.map((g, i) => (
+                  <tr
+                    key={g.id}
+                    className={cn(
+                      "border-t border-slate-100 transition hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/40",
+                      i % 2 === 1 && "bg-slate-50/50 dark:bg-slate-900/30",
+                    )}
+                  >
+                    <td className={tdClass}>{g.display_order}</td>
+                    <td className={cn(tdClass, "font-medium")}>{g.name}</td>
+                    <td className={tdClass}>
+                      <SoftBadge tone={g.is_appointment_service ? "sky" : "slate"}>
+                        {g.is_appointment_service ? "Evet" : "Hayır"}
+                      </SoftBadge>
+                    </td>
+                    <td className={tdClass}>
+                      <StatusBadge active={g.is_active} />
+                    </td>
+                    <td className={cn(tdClass, "flex gap-2")}>
+                      <button
+                        onClick={() => handleEditGroupClick(g)}
+                        className={btnEdit}
+                      >
+                        <Edit2 size={14} /> Düzenle
+                      </button>
+                      <button
+                        onClick={() => handleDeleteGroup(g.id)}
+                        className={btnDelete}
+                      >
+                        <Trash2 size={14} /> Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* --- 2. ÜRÜN TANIMLARI TABI --- */}
       {activeSubTab === "products" && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 2fr",
-            gap: "20px",
-          }}
-        >
-          <form
-            onSubmit={handleSaveProduct}
-            style={{
-              background: "#f8fafc",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-            }}
-          >
-            <h3>
-              {editingProductId ? <RefreshCw size={18} /> : <Plus size={18} />}{" "}
-              {editingProductId
-                ? "Ürün / Hizmet Düzenle"
-                : "Yeni Ürün / Hizmet"}
+        <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
+          <form onSubmit={handleSaveProduct} className={cardClass}>
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
+              {editingProductId ? <RefreshCw size={18} /> : <Plus size={18} />}
+              {editingProductId ? "Ürün / Hizmet Düzenle" : "Yeni Ürün / Hizmet"}
             </h3>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Ürün Grubu:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Ürün Grubu</label>
               <select
                 value={productForm.group_id}
                 onChange={(e) =>
                   setProductForm({ ...productForm, group_id: e.target.value })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
               >
                 <option value="">-- Grup Seçin --</option>
                 {productGroups.map((g) => (
@@ -716,10 +528,8 @@ const DefinitionsManagement = () => {
                 ))}
               </select>
             </div>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Ürün / Hizmet Adı:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Ürün / Hizmet Adı</label>
               <input
                 type="text"
                 value={productForm.name}
@@ -727,15 +537,13 @@ const DefinitionsManagement = () => {
                   setProductForm({ ...productForm, name: e.target.value })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
                 placeholder="Örn: Klasik Masaj"
               />
             </div>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-              <div style={{ flex: 2 }}>
-                <label style={{ display: "block", fontSize: "13px" }}>
-                  Fiyat:
-                </label>
+            <div className="mb-3 grid grid-cols-3 gap-3">
+              <div className="col-span-2">
+                <label className={labelClass}>Fiyat</label>
                 <input
                   type="number"
                   step="0.01"
@@ -744,19 +552,17 @@ const DefinitionsManagement = () => {
                     setProductForm({ ...productForm, price: e.target.value })
                   }
                   required
-                  style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                  className={fieldClass}
                 />
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: "13px" }}>
-                  Para Birimi:
-                </label>
+              <div>
+                <label className={labelClass}>Para Birimi</label>
                 <select
                   value={productForm.currency}
                   onChange={(e) =>
                     setProductForm({ ...productForm, currency: e.target.value })
                   }
-                  style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                  className={fieldClass}
                 >
                   {currencies.map((c) => (
                     <option key={c.id} value={c.code}>
@@ -766,10 +572,8 @@ const DefinitionsManagement = () => {
                 </select>
               </div>
             </div>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Süre (Dakika - İsteğe Bağlı):
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Süre (dakika, isteğe bağlı)</label>
               <input
                 type="number"
                 value={productForm.duration_minutes || ""}
@@ -780,18 +584,11 @@ const DefinitionsManagement = () => {
                   })
                 }
                 placeholder="Örn: 45"
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
               />
             </div>
             {editingProductId && (
-              <div
-                style={{
-                  marginBottom: "15px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                 <input
                   type="checkbox"
                   id="prod_active"
@@ -802,146 +599,98 @@ const DefinitionsManagement = () => {
                       is_active: e.target.checked,
                     })
                   }
+                  className="rounded border-slate-300 text-amber-600"
                 />
-                <label
-                  htmlFor="prod_active"
-                  style={{ fontSize: "13px", cursor: "pointer" }}
-                >
-                  Aktif Satışta
-                </label>
-              </div>
+                Aktif satışta
+              </label>
             )}
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  background: editingProductId ? "#059669" : "#2563eb",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                }}
-              >
-                {editingProductId ? "Güncelle" : "Kaydet"}
-              </button>
-              {editingProductId && (
-                <button
-                  type="button"
-                  onClick={resetProductForm}
-                  style={{
-                    padding: "10px",
-                    background: "#64748b",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Vazgeç
-                </button>
-              )}
-            </div>
+            <FormActions
+              editing={editingProductId}
+              onCancel={resetProductForm}
+            />
           </form>
 
-          {/* --- DÜZELTİLEN ÜRÜNLER TABLOSU --- */}
-          <table
-            border="1"
-            cellPadding="10"
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "left",
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#0f172a", color: "#fff" }}>
-                <th>Grup</th>
-                <th>Ürün / Hizmet Adı</th>
-                <th>Fiyat</th>
-                <th>Süre</th>
-                <th>Durum</th>
-                <th>İşlemler</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.length === 0 ? (
+          <div className={tableWrap}>
+            <table className="w-full text-left">
+              <thead className="bg-slate-50/90 dark:bg-slate-800/60">
                 <tr>
-                  <td colSpan="6" style={{ textAlign: "center" }}>
-                    Henüz tanımlanmış ürün bulunamadı.
-                  </td>
+                  <th className={thClass}>Grup</th>
+                  <th className={thClass}>Ürün / Hizmet Adı</th>
+                  <th className={thClass}>Fiyat</th>
+                  <th className={thClass}>Süre</th>
+                  <th className={thClass}>Durum</th>
+                  <th className={thClass}>İşlemler</th>
                 </tr>
-              ) : (
-                products.map((p) => {
-                  // Ürünün grup adını bulma
-                  const group = productGroups.find((g) => g.id === p.group_id);
-                  return (
-                    <tr key={p.id}>
-                      <td>{group ? group.name : p.group_name || "-"}</td>
-                      <td>
-                        <strong>{p.name}</strong>
-                      </td>
-                      <td>
-                        {p.price} {p.currency || "TRY"}
-                      </td>
-                      <td>
-                        {p.duration_minutes ? `${p.duration_minutes} dk` : "-"}
-                      </td>
-                      <td>
-                        <span
-                          style={{
-                            color: p.is_active ? "green" : "red",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {p.is_active ? "Aktif" : "Pasif"}
-                        </span>
-                      </td>
-                      <td style={{ display: "flex", gap: "8px" }}>
-                        <button onClick={() => handleEditProductClick(p)}>
-                          Düzenle
-                        </button>
-                        <button onClick={() => handleDeleteProduct(p.id)}>
-                          Sil
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {products.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan="6"
+                      className="px-4 py-8 text-center text-sm text-slate-500"
+                    >
+                      Henüz tanımlanmış ürün bulunamadı.
+                    </td>
+                  </tr>
+                ) : (
+                  products.map((p, i) => {
+                    const group = productGroups.find((g) => g.id === p.group_id);
+                    return (
+                      <tr
+                        key={p.id}
+                        className={cn(
+                          "border-t border-slate-100 transition hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/40",
+                          i % 2 === 1 && "bg-slate-50/50 dark:bg-slate-900/30",
+                        )}
+                      >
+                        <td className={tdClass}>
+                          {group ? group.name : p.group_name || "-"}
+                        </td>
+                        <td className={cn(tdClass, "font-medium")}>{p.name}</td>
+                        <td className={tdClass}>
+                          {formatCurrency(p.price, p.currency || p.currency_code)}
+                        </td>
+                        <td className={tdClass}>
+                          {p.duration_minutes
+                            ? `${p.duration_minutes} dk`
+                            : "-"}
+                        </td>
+                        <td className={tdClass}>
+                          <StatusBadge active={p.is_active} />
+                        </td>
+                        <td className={cn(tdClass, "flex gap-2")}>
+                          <button
+                            onClick={() => handleEditProductClick(p)}
+                            className={btnEdit}
+                          >
+                            <Edit2 size={14} /> Düzenle
+                          </button>
+                          <button
+                            onClick={() => handleDeleteProduct(p.id)}
+                            className={btnDelete}
+                          >
+                            <Trash2 size={14} /> Sil
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* --- 3. MESLEK TANIMLARI TABI --- */}
       {activeSubTab === "professions" && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 2fr",
-            gap: "20px",
-          }}
-        >
-          <form
-            onSubmit={handleSaveProf}
-            style={{
-              background: "#f8fafc",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-            }}
-          >
-            <h3>
-              {editingProfId ? <RefreshCw size={18} /> : <Plus size={18} />}{" "}
+        <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
+          <form onSubmit={handleSaveProf} className={cardClass}>
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
+              {editingProfId ? <RefreshCw size={18} /> : <Plus size={18} />}
               {editingProfId ? "Meslek Düzenle" : "Yeni Meslek Tanımı"}
             </h3>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Meslek Adı:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Meslek Adı</label>
               <input
                 type="text"
                 value={profForm.name}
@@ -949,14 +698,12 @@ const DefinitionsManagement = () => {
                   setProfForm({ ...profForm, name: e.target.value })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
                 placeholder="Örn: Tellak, Masör"
               />
             </div>
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Sıra No:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Sıra No</label>
               <input
                 type="number"
                 value={profForm.display_order}
@@ -966,140 +713,65 @@ const DefinitionsManagement = () => {
                     display_order: parseInt(e.target.value) || 0,
                   })
                 }
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
               />
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  background: editingProfId ? "#059669" : "#2563eb",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                }}
-              >
-                {editingProfId ? "Güncelle" : "Kaydet"}
-              </button>
-              {editingProfId && (
-                <button
-                  type="button"
-                  onClick={resetProfForm}
-                  style={{
-                    padding: "10px",
-                    background: "#64748b",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Vazgeç
-                </button>
-              )}
-            </div>
+            <FormActions editing={editingProfId} onCancel={resetProfForm} />
           </form>
 
-          <table
-            border="1"
-            cellPadding="10"
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "left",
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#0f172a", color: "#fff" }}>
-                <th>Sıra</th>
-                <th>Meslek Unvanı</th>
-                <th>İşlemler</th>
-              </tr>
-            </thead>
-            <tbody>
-              {professions.map((pr) => (
-                <tr key={pr.id}>
-                  <td>{pr.display_order}</td>
-                  <td>
-                    <strong>{pr.name}</strong>
-                  </td>
-                  <td style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      onClick={() => handleEditProfClick(pr)}
-                      style={{
-                        padding: "4px 8px",
-                        background: "#eab308",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Edit2 size={14} /> Düzenle
-                    </button>
-                    <button
-                      onClick={() => handleDeleteProf(pr.id)}
-                      style={{
-                        padding: "4px 8px",
-                        background: "#dc2626",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Trash2 size={14} /> Sil
-                    </button>
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full text-left">
+              <thead className="bg-slate-50/90 dark:bg-slate-800/60">
+                <tr>
+                  <th className={thClass}>Sıra</th>
+                  <th className={thClass}>Meslek Unvanı</th>
+                  <th className={thClass}>İşlemler</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {professions.map((pr, i) => (
+                  <tr
+                    key={pr.id}
+                    className={cn(
+                      "border-t border-slate-100 transition hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/40",
+                      i % 2 === 1 && "bg-slate-50/50 dark:bg-slate-900/30",
+                    )}
+                  >
+                    <td className={tdClass}>{pr.display_order}</td>
+                    <td className={cn(tdClass, "font-medium")}>{pr.name}</td>
+                    <td className={cn(tdClass, "flex gap-2")}>
+                      <button
+                        onClick={() => handleEditProfClick(pr)}
+                        className={btnEdit}
+                      >
+                        <Edit2 size={14} /> Düzenle
+                      </button>
+                      <button
+                        onClick={() => handleDeleteProf(pr.id)}
+                        className={btnDelete}
+                      >
+                        <Trash2 size={14} /> Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* --- 4. PERSONEL TANIMLARI TABI --- */}
-      {activeSubTab === "employees" && (
-        <div>
-          <EmployeeManagement />
-        </div>
-      )}
-      {/* --- 5. ODA TANIMLARI TABI --- */}
+      {activeSubTab === "employees" && <EmployeeManagement />}
+
       {activeSubTab === "rooms" && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 2fr",
-            gap: "20px",
-          }}
-        >
-          <form
-            onSubmit={handleSaveRoom}
-            style={{
-              background: "#f8fafc",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-            }}
-          >
-            <h3>
+        <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
+          <form onSubmit={handleSaveRoom} className={cardClass}>
+            <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
               {editingRoomId ? <RefreshCw size={18} /> : <Plus size={18} />}
               {editingRoomId ? "Oda Düzenle" : "Yeni Oda Tanımı"}
             </h3>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Oda / Alan Adı:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Oda / Alan Adı</label>
               <input
                 type="text"
                 value={roomForm.name}
@@ -1107,14 +779,12 @@ const DefinitionsManagement = () => {
                   setRoomForm({ ...roomForm, name: e.target.value })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
                 placeholder="Örn: VIP Masaj Odası 1"
               />
             </div>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Kapasite (Kişi):
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Kapasite (Kişi)</label>
               <input
                 type="number"
                 min="1"
@@ -1126,13 +796,11 @@ const DefinitionsManagement = () => {
                   })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
               />
             </div>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Sıra No:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Sıra No</label>
               <input
                 type="number"
                 value={roomForm.display_order}
@@ -1142,18 +810,11 @@ const DefinitionsManagement = () => {
                     display_order: parseInt(e.target.value) || 0,
                   })
                 }
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
               />
             </div>
             {editingRoomId && (
-              <div
-                style={{
-                  marginBottom: "15px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
+              <label className="mb-3 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                 <input
                   type="checkbox"
                   id="room_active"
@@ -1161,163 +822,92 @@ const DefinitionsManagement = () => {
                   onChange={(e) =>
                     setRoomForm({ ...roomForm, is_active: e.target.checked })
                   }
+                  className="rounded border-slate-300 text-amber-600"
                 />
-                <label
-                  htmlFor="room_active"
-                  style={{ fontSize: "13px", cursor: "pointer" }}
-                >
-                  Aktif Durumda
-                </label>
-              </div>
+                Aktif durumda
+              </label>
             )}
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button
-                type="submit"
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  background: editingRoomId ? "#059669" : "#2563eb",
-                  color: "#fff",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "bold",
-                }}
-              >
-                {editingRoomId ? "Güncelle" : "Kaydet"}
-              </button>
-              {editingRoomId && (
-                <button
-                  type="button"
-                  onClick={resetRoomForm}
-                  style={{
-                    padding: "10px",
-                    background: "#64748b",
-                    color: "#fff",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                  }}
-                >
-                  Vazgeç
-                </button>
-              )}
-            </div>
+            <FormActions editing={editingRoomId} onCancel={resetRoomForm} />
           </form>
 
-          <table
-            border="1"
-            cellPadding="10"
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "left",
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#0f172a", color: "#fff" }}>
-                <th>Sıra</th>
-                <th>Oda Adı</th>
-                <th>Kapasite</th>
-                <th>Durum</th>
-                <th>İşlemler</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rooms.map((rm) => (
-                <tr key={rm.id}>
-                  <td>{rm.display_order}</td>
-                  <td>
-                    <strong>{rm.name}</strong>
-                  </td>
-                  <td>{rm.capacity} Kişilik</td>
-                  <td>
-                    <span
-                      style={{
-                        color: rm.is_active ? "green" : "red",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {rm.is_active ? "Aktif" : "Pasif"}
-                    </span>
-                  </td>
-                  <td style={{ display: "flex", gap: "8px" }}>
-                    <button
-                      onClick={() => handleEditRoomClick(rm)}
-                      style={{
-                        padding: "4px 8px",
-                        background: "#eab308",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Edit2 size={14} /> Düzenle
-                    </button>
-                    <button
-                      onClick={() => handleDeleteRoom(rm.id)}
-                      style={{
-                        padding: "4px 8px",
-                        background: "#dc2626",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                      }}
-                    >
-                      <Trash2 size={14} /> Sil
-                    </button>
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full text-left">
+              <thead className="bg-slate-50/90 dark:bg-slate-800/60">
+                <tr>
+                  <th className={thClass}>Sıra</th>
+                  <th className={thClass}>Oda Adı</th>
+                  <th className={thClass}>Kapasite</th>
+                  <th className={thClass}>Durum</th>
+                  <th className={thClass}>İşlemler</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rooms.map((rm, i) => (
+                  <tr
+                    key={rm.id}
+                    className={cn(
+                      "border-t border-slate-100 transition hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/40",
+                      i % 2 === 1 && "bg-slate-50/50 dark:bg-slate-900/30",
+                    )}
+                  >
+                    <td className={tdClass}>{rm.display_order}</td>
+                    <td className={cn(tdClass, "font-medium")}>{rm.name}</td>
+                    <td className={tdClass}>{rm.capacity} Kişilik</td>
+                    <td className={tdClass}>
+                      <StatusBadge active={rm.is_active} />
+                    </td>
+                    <td className={cn(tdClass, "flex gap-2")}>
+                      <button
+                        onClick={() => handleEditRoomClick(rm)}
+                        className={btnEdit}
+                      >
+                        <Edit2 size={14} /> Düzenle
+                      </button>
+                      <button
+                        onClick={() => handleDeleteRoom(rm.id)}
+                        className={btnDelete}
+                      >
+                        <Trash2 size={14} /> Sil
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* --- DÖVİZ TANIMLARI TABI --- */}
       {activeSubTab === "currencies" && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 2fr",
-            gap: "20px",
-          }}
-        >
-          {/* Sol Form Alanı */}
-          <form
-            onSubmit={handleAddCurr}
-            style={{
-              background: "#f8fafc",
-              padding: "15px",
-              borderRadius: "8px",
-              border: "1px solid #cbd5e1",
-            }}
-          >
-            <h3>
+        <div className="grid gap-5 lg:grid-cols-[1fr_2fr]">
+          <form onSubmit={handleAddCurr} className={cardClass}>
+            <h3 className="mb-2 flex items-center gap-2 text-lg font-semibold text-slate-800 dark:text-slate-100">
               <Plus size={18} /> Yeni Döviz Tanımı
             </h3>
-            <p
-              style={{
-                fontSize: "12px",
-                color: "#64748b",
-                margin: "0 0 15px 0",
-              }}
-            >
-              Kurlar Merkez Bankası verilerine göre her gün otomatik
-              güncellenmektedir.
+            <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
+              Kurlar TCMB bültenine göre her gün otomatik güncellenir. İsterseniz
+              anlık senkron da çalıştırabilirsiniz.
             </p>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Döviz Kodu (USD, EUR):
-              </label>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await axios.post("http://localhost:5000/api/exchange-rates/sync");
+                  showMsg("TCMB kurları güncellendi.");
+                  fetchAllData();
+                } catch (err) {
+                  showMsg(
+                    err.response?.data?.error || "Kurlar güncellenemedi.",
+                    "error",
+                  );
+                }
+              }}
+              className={cn(btnSecondary, "mb-4 w-full")}
+            >
+              <RefreshCw size={15} /> TCMB Kurlarını Güncelle
+            </button>
+            <div className="mb-3">
+              <label className={labelClass}>Döviz Kodu (USD, EUR)</label>
               <input
                 type="text"
                 value={currForm.code}
@@ -1328,14 +918,12 @@ const DefinitionsManagement = () => {
                   })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
                 placeholder="Örn: EUR"
               />
             </div>
-            <div style={{ marginBottom: "10px" }}>
-              <label style={{ display: "block", fontSize: "13px" }}>
-                Tanım / Adı:
-              </label>
+            <div className="mb-3">
+              <label className={labelClass}>Tanım / Adı</label>
               <input
                 type="text"
                 value={currForm.name}
@@ -1343,15 +931,13 @@ const DefinitionsManagement = () => {
                   setCurrForm({ ...currForm, name: e.target.value })
                 }
                 required
-                style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                className={fieldClass}
                 placeholder="Örn: Euro"
               />
             </div>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: "13px" }}>
-                  Sembol:
-                </label>
+            <div className="mb-4 grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelClass}>Sembol</label>
                 <input
                   type="text"
                   value={currForm.symbol}
@@ -1359,14 +945,12 @@ const DefinitionsManagement = () => {
                     setCurrForm({ ...currForm, symbol: e.target.value })
                   }
                   required
-                  style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                  className={fieldClass}
                   placeholder="Örn: €"
                 />
               </div>
-              <div style={{ flex: 1 }}>
-                <label style={{ display: "block", fontSize: "13px" }}>
-                  Başlangıç Kuru (TRY):
-                </label>
+              <div>
+                <label className={labelClass}>Başlangıç Kuru (TRY)</label>
                 <input
                   type="number"
                   step="0.0001"
@@ -1377,60 +961,50 @@ const DefinitionsManagement = () => {
                       exchange_rate: parseFloat(e.target.value) || 1,
                     })
                   }
-                  style={{ width: "100%", padding: "8px", marginTop: "4px" }}
+                  className={fieldClass}
                 />
               </div>
             </div>
-            <button
-              type="submit"
-              style={{
-                width: "100%",
-                padding: "10px",
-                background: "#2563eb",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
+            <button type="submit" className={cn(btnPrimary, "w-full")}>
               Kaydet
             </button>
           </form>
 
-          {/* Sağ Tablo Alanı */}
-          <table
-            border="1"
-            cellPadding="10"
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              textAlign: "left",
-            }}
-          >
-            <thead>
-              <tr style={{ background: "#0f172a", color: "#fff" }}>
-                <th>Kod</th>
-                <th>Döviz Adı</th>
-                <th>Sembol</th>
-                <th>Güncel Kur (TRY)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currencies.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <strong>{c.code}</strong>
-                  </td>
-                  <td>{c.name}</td>
-                  <td>{c.symbol}</td>
-                  <td>
-                    <strong>{c.exchange_rate} ₺</strong>
-                  </td>
+          <div className={tableWrap}>
+            <table className="w-full text-left">
+              <thead className="bg-slate-50/90 dark:bg-slate-800/60">
+                <tr>
+                  <th className={thClass}>Kod</th>
+                  <th className={thClass}>Döviz Adı</th>
+                  <th className={thClass}>Sembol</th>
+                  <th className={thClass}>Güncel Kur (TRY)</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {currencies.map((c, i) => (
+                  <tr
+                    key={c.id}
+                    className={cn(
+                      "border-t border-slate-100 transition hover:bg-slate-50/80 dark:border-slate-800 dark:hover:bg-slate-800/40",
+                      i % 2 === 1 && "bg-slate-50/50 dark:bg-slate-900/30",
+                    )}
+                  >
+                    <td className={cn(tdClass, "font-medium")}>{c.code}</td>
+                    <td className={tdClass}>{c.name}</td>
+                    <td className={tdClass}>{c.symbol}</td>
+                    <td className={cn(tdClass, "font-semibold")}>
+                      {formatCurrency(c.live_rate || c.exchange_rate, "TRY")}
+                      {c.rate_date && (
+                        <div className="text-[11px] font-normal text-slate-400">
+                          {new Date(c.rate_date).toLocaleDateString("tr-TR")}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>

@@ -1,14 +1,25 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { Clock, Plus, Trash2, Save, X, Lock } from "lucide-react";
 import {
-  Clock,
-  Plus,
-  Utensils,
-  UserCheck,
-  AlertCircle,
-  CheckCircle,
-  Trash2,
-} from "lucide-react";
+  Alert,
+  PageHeader,
+  bookingTones,
+  btnDelete,
+  btnPrimary,
+  btnSecondary,
+  btnSuccess,
+  cardClass,
+  cn,
+  fieldClass,
+  labelClass,
+} from "../ui.jsx";
+import {
+  formatCurrency,
+  formatMixedTotals,
+  sumItemsToTry,
+  totalsByCurrency,
+} from "../currency.js";
 
 const HOURS = Array.from(
   { length: 16 },
@@ -22,22 +33,19 @@ const RoomGridMatrix = () => {
   const [rooms, setRooms] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [customers, setCustomers] = useState([]);
-  const [services, setServices] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [products, setProducts] = useState([]);
   const [productCategories, setProductCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [productsLoading, setProductsLoading] = useState(false);
 
-  // Adisyon Siparişleri (Geçici State)
   const [currentOrders, setCurrentOrders] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Modallar ve Seçili Veriler
-  const [activeModal, setActiveModal] = useState(null); // 'new' | 'detail' | null
+  const [activeModal, setActiveModal] = useState(null);
   const [selectedCell, setSelectedCell] = useState(null);
   const [selectedApp, setSelectedApp] = useState(null);
 
-  // Form Tarafı
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [formData, setFormData] = useState({
     customer_id: "",
@@ -50,267 +58,76 @@ const RoomGridMatrix = () => {
   });
 
   const [error, setError] = useState("");
-
-  /*
- 
-  const fetchMatrixDataaaa = async () => {
-    try {
-      const [matrixRes, custRes, servRes, empRes, prodRes, catRes] =
-        await Promise.all([
-          axios.get(
-            `http://localhost:5000/api/room-schedule?date=${selectedDate}`,
-          ),
-          axios.get("http://localhost:5000/api/customers"),
-          axios.get("http://localhost:5000/api/services"),
-          axios.get("http://localhost:5000/api/employees"),
-          axios.get("http://localhost:5000/api/products"),
-          axios
-            .get("http://localhost:5000/api/product-groups")
-            .catch(() => ({ data: [] })),
-        ]);
-
-      setRooms(matrixRes.data.rooms);
-      setAppointments(matrixRes.data.appointments);
-      setCustomers(custRes.data);
-      setServices(servRes.data.filter((s) => s.is_active));
-      setEmployees(empRes.data.filter((e) => e.is_active));
-
-      // fetchMatrixData içinde catRes ve activeProducts çekildikten sonra:
-      const activeProducts = prodRes.data.filter((p) => p.is_active !== false);
-      setProducts(activeProducts);
-
-      // Kategori Verilerini Ayarla (Hem ID hem İsim Eşleşmesini Destekleyecek Şekilde)
-      let cats = catRes.data || [];
-      setProductCategories(cats);
-
-      // Seçili kategori olarak grubun adını (veya varsayılan ilk ID'yi) atayın:
-      if (cats.length > 0) {
-        setSelectedCategory(cats[0].id);
-      }
-
-      setProductCategories(cats);
-      if (cats.length > 0) setSelectedCategory(cats[0].id);
-    } catch (err) {
-      console.error("Matris verisi çekilemedi:", err);
-    }
-  };
-*/
-
   const [appointmentServices, setAppointmentServices] = useState([]);
-  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [exchangeRates, setExchangeRates] = useState({ TRY: 1 });
+  const [exchangeDate, setExchangeDate] = useState(null);
 
   useEffect(() => {
     fetchMatrixData();
   }, [selectedDate]);
 
-  // Takvim Modal'ı için Randevu Hizmetlerini Çeken Fonksiyon
-  // 1. Randevu Hizmetlerini Çeken Fonksiyon (Supabase)
-  //
-  /*
-  const fetchAppointmentServices = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          `
-          id,
-          name,
-          price,
-          currency,
-          duration_minutes,
-          is_active,
-          product_groups!inner (
-            id,
-            name,
-            is_appointment_service,
-            is_active
-          )
-        `,
-        )
-        .eq("is_active", true)
-        .eq("product_groups.is_appointment_service", true)
-        .eq("product_groups.is_active", true);
-
-      if (error) {
-        console.error("Hizmetler çekilirken hata oluştu:", error);
-        return [];
-      }
-      return data || [];
-    } catch (err) {
-      console.error("Supabase bağlantı hatası:", err);
-      return [];
-    }
-  };
-  
-  */
-
-  // 2. Ana Veri Yükleme Fonksiyonu
-  //
-  /*
   const fetchMatrixData = async () => {
-    // ODA & TAKVİM MATRİSİ
-    axios
-      .get(`http://localhost:5000/api/room-schedule?date=${selectedDate}`)
-      .then((res) => {
-        setRooms(res.data.rooms || []);
-        setAppointments(res.data.appointments || []);
-      })
-      .catch((err) => console.error("Matris Hatası:", err));
-
-    // MÜŞTERİLER
-    axios
-      .get("http://localhost:5000/api/customers")
-      .then((res) => setCustomers(res.data || []))
-      .catch((err) => console.error("Müşteri Hatası:", err));
-
-    // PERSONELLER (Filtreyi esnetip veriyi garantiye alıyoruz)
-    axios
-      .get("http://localhost:5000/api/employees")
-      .then((res) => {
-        const empData = res.data || [];
-        // is_active alanı kontrolü
-        const activeEmps = empData.filter((e) => e.is_active !== false);
-        setEmployees(activeEmps.length > 0 ? activeEmps : empData);
-      })
-      .catch((err) => console.error("Personel Hatası:", err));
-
-    // HİZMETLER (Supabase)
-    fetchAppointmentServices().then((data) => {
-      setAppointmentServices(data);
-    });
-  };
-  
-  */
-  /*
-  const fetchMatrixData = async () => {
-    // Matris verileri
-    axios
-      .get(`http://localhost:5000/api/room-schedule?date=${selectedDate}`)
-      .then((res) => {
-        setRooms(res.data.rooms || []);
-        setAppointments(res.data.appointments || []);
-      })
-      .catch((err) => console.error("Matris Hatası:", err));
-
-    // Müşteriler (Burası çalıştığı için listede görünüyor)
-    axios
-      .get("http://localhost:5000/api/customers")
-      .then((res) => setCustomers(res.data || []))
-      .catch((err) => console.error("Müşteri Hatası:", err));
-
-    // Personeller
-    axios
-      .get("http://localhost:5000/api/employees")
-      .then((res) => setEmployees(res.data || []))
-      .catch((err) => console.error("Personel Hatası:", err));
-
-    // HİZMETLER / ÜRÜNLER (Backend'den çekip doğrudan state'e atıyoruz)
-    axios
-      .get("http://localhost:5000/api/products")
-      .then((res) => {
-        console.log("Frontend'e gelen hizmetler:", res.data); // F12 Konsolunda veriyi doğrulayın
-        setAppointmentServices(res.data || []);
-      })
-      .catch((err) => console.error("Hizmet Çekme Hatası:", err));
-  };
-*/
-
-  // 2. Ana Veri Yükleme Fonksiyonu
-  const fetchMatrixData = async () => {
-    // Matris verileri
-    axios
-      .get(`http://localhost:5000/api/room-schedule?date=${selectedDate}`)
-      .then((res) => {
-        setRooms(res.data.rooms || []);
-        setAppointments(res.data.appointments || []);
-      })
-      .catch((err) => console.error("Matris Hatası:", err));
-
-    // Müşteriler
-    axios
-      .get("http://localhost:5000/api/customers")
-      .then((res) => setCustomers(res.data || []))
-      .catch((err) => console.error("Müşteri Hatası:", err));
-
-    // Personeller
-    axios
-      .get("http://localhost:5000/api/employees")
-      .then((res) => setEmployees(res.data || []))
-      .catch((err) => console.error("Personel Hatası:", err));
-
-    // Hizmetler
-    fetchAppointmentServices().then((data) => {
-      setAppointmentServices(data);
-    });
-  };
-
-  // 1. Supabase Hizmet Çekme (Esnek & Hata Korumalı)
-  const fetchAppointmentServices22 = async () => {
     try {
-      if (!supabase) return [];
+      const [matrixRes, customersRes, employeesRes, groupsRes, servicesRes, ratesRes] =
+        await Promise.all([
+          axios.get(
+            `http://localhost:5000/api/room-schedule?date=${selectedDate}`,
+          ),
+          axios.get("http://localhost:5000/api/customers"),
+          axios.get("http://localhost:5000/api/employees"),
+          axios.get("http://localhost:5000/api/product-groups?active=true"),
+          axios.get("http://localhost:5000/api/appointment-services"),
+          axios.get("http://localhost:5000/api/exchange-rates").catch(() => ({
+            data: { rates: { TRY: 1 } },
+          })),
+        ]);
 
-      // Filtreleri sadeleştirerek verinin gelmesini garantiye alalım
-      const { data, error } = await supabase
-        .from("products")
-        .select(
-          `
-        id,
-        name,
-        price,
-        currency,
-        duration_minutes,
-        is_active
-      `,
-        )
-        .eq("is_active", true);
+      setExchangeRates({ TRY: 1, ...(ratesRes.data?.rates || {}) });
+      setExchangeDate(ratesRes.data?.date || null);
 
-      if (error) {
-        console.error("Supabase Hizmet Hatası:", error.message);
-        return [];
-      }
-      return data || [];
+      setRooms(matrixRes.data.rooms || []);
+      setAppointments(matrixRes.data.appointments || []);
+      setCustomers(customersRes.data || []);
+      setEmployees(
+        (employeesRes.data || []).filter((e) => e.is_active !== false),
+      );
+
+      const activeGroups = (groupsRes.data || []).filter(
+        (g) => g.is_active !== false,
+      );
+      setProductCategories(activeGroups);
+
+      setAppointmentServices(
+        (servicesRes.data || []).filter((p) => p.is_active !== false),
+      );
     } catch (err) {
-      console.error("Supabase Bağlantı Hatası:", err);
-      return [];
+      console.error("Veri çekme hatası:", err);
     }
   };
 
-  // Randevu Hizmetlerini Backend Üzerinden Çeken Fonksiyon
-  //
-  /*
-  const fetchAppointmentServices = async () => {
+  const handleSelectProductGroup = async (groupId) => {
+    setSelectedCategory(groupId);
+    setProductsLoading(true);
     try {
-      const res = await axios.get("http://localhost:5000/api/products");
-      return res.data || [];
+      const res = await axios.get(
+        `http://localhost:5000/api/products?group_id=${groupId}&active=true`,
+      );
+      setProducts((res.data || []).filter((p) => p.is_active !== false));
     } catch (err) {
-      console.error("Hizmetler backend'den çekilemedi:", err);
-      return [];
-    }
-  };
-*/
-
-  const fetchAppointmentServices = async () => {
-    try {
-      const res = await axios.get("http://localhost:5000/api/products");
-      return res.data || [];
-    } catch (err) {
-      console.error("Hizmetler çekilemedi:", err);
-      return [];
+      console.error("Grup ürünleri çekilemedi:", err);
+      setProducts([]);
+    } finally {
+      setProductsLoading(false);
     }
   };
 
-  // Boş Hücreye Tıklandığında
-  // Boş Hücreye Tıklandığında
   const handleCellClick = (room, hour) => {
-    // Seçilen günün saatini 00:00:00 yapıyoruz
     const selected = new Date(selectedDate);
     selected.setHours(0, 0, 0, 0);
 
-    // Bugünkü günün saatini 00:00:00 yapıyoruz
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Sadece seçilen gün BUGÜNDEN ÖNCEYSE (Dün veya daha eski) engelle
     if (selected < today) {
       alert("Geçmiş günlere yeni rezervasyon ekleyemezsiniz!");
       return;
@@ -330,12 +147,9 @@ const RoomGridMatrix = () => {
     setActiveModal("new");
   };
 
-  // Service Seçildiğinde Otomatik Süre Ayarlama Handler'ı
-  // Hizmet Seçimi Handler'ı (Tür güvenliği sağlandı)
   const handleServiceChange = (e) => {
     const serviceId = e.target.value;
 
-    // Bulma işleminde string/number farkını eşitleyin
     const selectedService = appointmentServices.find(
       (s) => String(s.id) === String(serviceId),
     );
@@ -348,11 +162,12 @@ const RoomGridMatrix = () => {
     }));
   };
 
-  // Dolu Hücreye Tıklandığında Adisyon Verileriyle Birlikte Paneli Aç
   const handleAppClick = async (app, e) => {
     e.stopPropagation();
     setSelectedApp(app);
     setError("");
+    setSelectedCategory(null);
+    setProducts([]);
 
     try {
       const ordersRes = await axios.get(
@@ -367,7 +182,6 @@ const RoomGridMatrix = () => {
     setActiveModal("detail");
   };
 
-  // Yeni Oda Kaydı Kaydetme
   const handleNewReservationSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -401,25 +215,9 @@ const RoomGridMatrix = () => {
     }
   };
 
-  //KULLLANILMIYOR
-  // Randevuyu İptal Et / Sil
-  const handleDeleteAppointment = async (id) => {
-    if (!window.confirm("Bu rezervasyonu silmek istediğinizden emin misiniz?"))
-      return;
-
-    try {
-      await axios.delete(`http://localhost:5000/api/room-appointments/${id}`);
-      setActiveModal(null);
-      fetchMatrixData();
-    } catch (err) {
-      alert(err.response?.data?.error || "Silme işlemi başarısız oldu.");
-    }
-  };
-  // Rezervasyon Silme İşlemi
   const handleDeleteReservation = async (possibleId) => {
     if (!selectedApp) return;
 
-    // 1. Tarih Kontrolü
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -434,7 +232,6 @@ const RoomGridMatrix = () => {
     if (!window.confirm("Bu rezervasyonu silmek istediğinize emin misiniz?"))
       return;
 
-    // 2. ID Tespiti
     let appId =
       possibleId && typeof possibleId !== "object"
         ? possibleId
@@ -442,27 +239,19 @@ const RoomGridMatrix = () => {
           selectedApp.id ||
           selectedApp.appointment_id;
 
-    console.log(
-      "Silinecek Oda Rezervasyon ID:",
-      appId,
-      "Tüm Obje:",
-      selectedApp,
-    );
-
     if (!appId) {
       alert("Silinecek oda rezervasyon ID'si bulunamadı!");
       return;
     }
 
     try {
-      // 3. Doğrudan oda rezervasyonu silme API isteği
       await axios.delete(
         `http://localhost:5000/api/room-appointments/${appId}`,
       );
 
       alert("Oda rezervasyonu başarıyla silindi.");
       setActiveModal(null);
-      fetchMatrixData(); // Ekranı/Matrisi yenile
+      fetchMatrixData();
     } catch (err) {
       console.error("Silme hatası:", err);
       alert(
@@ -474,7 +263,6 @@ const RoomGridMatrix = () => {
     }
   };
 
-  // 1. Ürün Ekleme (Geçici Listeye Ekleme Yapılır, DB'ye Yazılmaz)
   const handleAddProductTemp = (product) => {
     const price = parseFloat(product.price) || 0;
     const newOrderItem = {
@@ -484,62 +272,33 @@ const RoomGridMatrix = () => {
       quantity: 1,
       unit_price: price,
       total_price: price,
+      currency: product.currency || product.currency_code || "TRY",
     };
 
     setCurrentOrders((prev) => [...prev, newOrderItem]);
   };
 
-  // 2. Adisyondan Ürün Silme (Geçici Listeden Çıkarır)
   const handleRemoveProductTemp = (indexToRemove) => {
     setCurrentOrders((prev) =>
       prev.filter((_, index) => index !== indexToRemove),
     );
   };
 
-  // 3. Adisyonu Topluca Veritabanına Kaydetme
-  const handleSaveOrders1 = async () => {
-    if (!selectedApp) return;
-
-    try {
-      setIsSaving(true);
-      await axios.post("http://localhost:5000/api/room-orders/bulk-save", {
-        room_appointment_id: selectedApp.id,
-        orders: currentOrders,
-      });
-
-      alert("Adisyon başarıyla kaydedildi!");
-      setActiveModal(null);
-      fetchMatrixData();
-    } catch (err) {
-      console.error(err);
-      alert(
-        "Adisyon kaydedilirken hata oluştu: " +
-          (err.response?.data?.error || err.message),
-      );
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // 3. Adisyonu Topluca Veritabanına Kaydetme
   const handleSaveOrders = async () => {
     if (!selectedApp) return;
 
-    // --- GEÇMİŞ TARİH KONTROLÜ ---
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const appDate = new Date(selectedApp.appointment_date || selectedApp.date);
     appDate.setHours(0, 0, 0, 0);
 
-    // Sadece randevu günü BUGÜNDEN ÖNCEYSE (Dün ve öncesi) engelle
     if (appDate < today) {
       alert(
         "Geçmiş günlere ait rezervasyonlarda adisyon değişikliği veya kaydı yapamazsınız!",
       );
       return;
     }
-    // -----------------------------
 
     try {
       setIsSaving(true);
@@ -563,69 +322,62 @@ const RoomGridMatrix = () => {
   };
 
   const findAppointment = (roomId, hour) => {
+    const [targetHour] = hour.split(":").map(Number);
+    const targetTime = targetHour * 60;
     return appointments.find((app) => {
       if (app.room_id !== roomId) return false;
-      const appHour =
-        new Date(app.start_time).getHours().toString().padStart(2, "0") + ":00";
-      return appHour === hour;
+      const appDate = new Date(app.start_time);
+      const appStart = appDate.getHours() * 60 + appDate.getMinutes();
+      const appEnd = appStart + (app.duration_minutes || 60);
+      return targetTime >= appStart && targetTime < appEnd;
+    });
+  };
+
+  const isContinuation = (roomId, hour) => {
+    const [targetHour] = hour.split(":").map(Number);
+    const targetTime = targetHour * 60;
+    return appointments.some((app) => {
+      if (app.room_id !== roomId) return false;
+      const appDate = new Date(app.start_time);
+      const appStart = appDate.getHours() * 60 + appDate.getMinutes();
+      const appDuration = app.duration_minutes || 60;
+      return targetTime > appStart && targetTime < appStart + appDuration;
     });
   };
 
   return (
-    <div style={{ padding: "20px", fontFamily: "Arial, sans-serif" }}>
-      {/* BAŞLIK VE TARİH FİLTRESİ */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-        }}
-      >
-        <h2>
-          <Clock size={24} /> Günlük Oda & Saat Bazlı Takip
-        </h2>
-        <div>
-          <label style={{ fontWeight: "bold", marginRight: "10px" }}>
-            Tarih Seçin:
+    <div>
+      <PageHeader
+        icon={Clock}
+        title="Günlük Oda & Saat Bazlı Takip"
+        subtitle="Odaları saat dilimine göre izleyin, rezervasyon ve adisyon yönetin."
+        actions={
+          <label className="inline-flex items-center gap-3 rounded-full border border-slate-200 bg-white/80 px-4 py-2 shadow-sm backdrop-blur-md dark:border-slate-700 dark:bg-slate-900/70">
+            <span className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Tarih
+            </span>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="border-0 bg-transparent text-sm font-medium text-slate-800 outline-none dark:text-slate-100"
+            />
           </label>
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            style={{
-              padding: "8px",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-            }}
-          />
-        </div>
-      </div>
+        }
+      />
 
-      {/* MATRİS TABLOSU */}
-      <div
-        style={{
-          overflowX: "auto",
-          background: "#fff",
-          border: "1px solid #ddd",
-          borderRadius: "8px",
-        }}
-      >
-        <table
-          border="1"
-          cellPadding="8"
-          cellSpacing="0"
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            textAlign: "center",
-          }}
-        >
+      <div className="overflow-x-auto rounded-2xl border border-slate-200/80 bg-white/70 p-3 shadow-md backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/40">
+        <table className="w-full min-w-[1100px] border-separate border-spacing-1 text-center">
           <thead>
-            <tr style={{ background: "#0f172a", color: "#fff" }}>
-              <th style={{ width: "150px" }}>Oda / Saat</th>
+            <tr>
+              <th className="w-40 rounded-lg bg-slate-900 px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-200 dark:bg-slate-800">
+                Oda / Saat
+              </th>
               {HOURS.map((h) => (
-                <th key={h} style={{ fontSize: "13px" }}>
+                <th
+                  key={h}
+                  className="rounded-lg bg-slate-800 px-1 py-2.5 text-[11px] font-medium text-slate-200 dark:bg-slate-800/90"
+                >
                   {h}
                 </th>
               ))}
@@ -634,63 +386,60 @@ const RoomGridMatrix = () => {
           <tbody>
             {rooms.map((room) => (
               <tr key={room.id}>
-                <td
-                  style={{
-                    background: "#f1f5f9",
-                    fontWeight: "bold",
-                    textAlign: "left",
-                    paddingLeft: "10px",
-                  }}
-                >
-                  {room.name}
-                  <div
-                    style={{
-                      fontSize: "11px",
-                      color: "#64748b",
-                      fontWeight: "normal",
-                    }}
-                  >
+                <td className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm dark:border-slate-700 dark:bg-slate-800/80">
+                  <div className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                    {room.name}
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
                     Kapasite: {room.capacity} Kişi
                   </div>
                 </td>
-
                 {HOURS.map((hour) => {
+                  if (isContinuation(room.id, hour)) {
+                    return null;
+                  }
+
                   const app = findAppointment(room.id, hour);
+                  const colSpan = app
+                    ? Math.ceil((app.duration_minutes || 60) / 60)
+                    : 1;
+                  const tone =
+                    bookingTones[(app?.id || 0) % bookingTones.length];
 
                   return (
                     <td
                       key={hour}
+                      colSpan={colSpan}
                       onClick={() => !app && handleCellClick(room, hour)}
-                      style={{
-                        height: "50px",
-                        cursor: app ? "default" : "pointer",
-                        backgroundColor: app ? "#fee2e2" : "#ffffff",
-                        position: "relative",
-                      }}
+                      className={cn(
+                        "h-16 rounded-lg border p-1 align-middle",
+                        app
+                          ? "border-transparent"
+                          : "cursor-pointer border-slate-200 bg-slate-50/80 transition hover:border-amber-300 hover:bg-amber-50/70 dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-amber-500/40 dark:hover:bg-amber-500/10",
+                      )}
                     >
                       {app ? (
-                        <div
+                        <button
+                          type="button"
                           onClick={(e) => handleAppClick(app, e)}
-                          style={{
-                            background: "#ef4444",
-                            color: "#fff",
-                            borderRadius: "4px",
-                            padding: "4px",
-                            fontSize: "11px",
-                            cursor: "pointer",
-                            height: "100%",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                          }}
+                          className={cn(
+                            "flex h-full w-full flex-col items-center justify-center rounded-lg border px-2 py-1 text-[11px] leading-tight",
+                            tone,
+                          )}
                         >
-                          <strong>{app.customer_fullname}</strong>
-                          <span>{app.service_name}</span>
-                          <span>{app.guest_count} Kişi</span>
-                        </div>
+                          <strong className="truncate font-semibold">
+                            {app.customer_fullname}
+                          </strong>
+                          <span className="truncate opacity-90">
+                            {app.service_name}
+                          </span>
+                          <span className="opacity-75">
+                            {app.guest_count} Kişi · {app.duration_minutes} dk
+                          </span>
+                        </button>
                       ) : (
-                        <span style={{ color: "#cbd5e1", fontSize: "12px" }}>
-                          +
+                        <span className="inline-flex items-center justify-center text-slate-300 dark:text-slate-600">
+                          <Plus size={14} />
                         </span>
                       )}
                     </td>
@@ -702,188 +451,163 @@ const RoomGridMatrix = () => {
         </table>
       </div>
 
-      {/* MODAL 1: YENİ ODA GİRİŞİ */}
       {activeModal === "new" && selectedCell && (
-        <div style={modalOverlayStyle}>
-          <div style={modalContentStyle}>
-            <h3>
-              Yeni Oda Girişi ({selectedCell.room.name} - {selectedCell.hour})
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+          <div className={cn(cardClass, "w-full max-w-md p-6")}>
+            <h3 className="mb-4 text-xl font-semibold text-slate-800 dark:text-slate-100">
+              Yeni Rezervasyon — {selectedCell.room.name} / {selectedCell.hour}
             </h3>
-            <p style={{ fontSize: "12px", color: "#666" }}>
-              Oda Kapasitesi: {selectedCell.room.capacity} Kişi
-            </p>
-            {error && (
-              <div
-                style={{ color: "red", marginBottom: "10px", fontSize: "13px" }}
-              >
-                {error}
-              </div>
-            )}
-
+            <Alert type="error">{error}</Alert>
             <form
               onSubmit={handleNewReservationSubmit}
-              style={{ display: "flex", flexDirection: "column", gap: "10px" }}
+              className="flex flex-col gap-3"
             >
-              <div>
-                <label style={{ fontSize: "12px" }}>Müşteri Tipi:</label>
-                <div style={{ marginTop: "4px" }}>
-                  <button
-                    type="button"
-                    onClick={() => setIsNewCustomer(false)}
-                    style={{
-                      padding: "6px 12px",
-                      marginRight: "5px",
-                      background: !isNewCustomer ? "#2563eb" : "#ccc",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    Kayıtlı Müşteri
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsNewCustomer(true)}
-                    style={{
-                      padding: "6px 12px",
-                      background: isNewCustomer ? "#2563eb" : "#ccc",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "4px",
-                    }}
-                  >
-                    Anlık / Yeni Müşteri
-                  </button>
-                </div>
-              </div>
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={isNewCustomer}
+                  onChange={(e) => setIsNewCustomer(e.target.checked)}
+                  className="rounded border-slate-300 text-amber-600"
+                />
+                Yeni misafir girişi
+              </label>
 
-              {!isNewCustomer ? (
+              {isNewCustomer ? (
+                <div>
+                  <label className={labelClass}>Misafir Adı Soyadı</label>
+                  <input
+                    required
+                    value={formData.new_customer_name}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        new_customer_name: e.target.value,
+                      }))
+                    }
+                    className={fieldClass}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <label className={labelClass}>Kayıtlı Misafir</label>
+                  <select
+                    required
+                    value={formData.customer_id}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        customer_id: e.target.value,
+                      }))
+                    }
+                    className={fieldClass}
+                  >
+                    <option value="">-- Misafir Seçin --</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.first_name} {c.last_name}
+                        {c.phone ? ` (${c.phone})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className={labelClass}>Hizmet</label>
                 <select
-                  value={formData.customer_id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, customer_id: e.target.value })
-                  }
                   required
-                  style={inputStyle}
+                  value={formData.service_id}
+                  onChange={handleServiceChange}
+                  className={fieldClass}
                 >
-                  <option value="">-- Müşteri Seçin --</option>
-                  {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.first_name} {c.last_name}
+                  <option value="">-- Hizmet Seçin --</option>
+                  {appointmentServices.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} — {formatCurrency(s.price, s.currency || s.currency_code)}
+                      {s.duration_minutes ? ` (${s.duration_minutes} dk)` : ""}
                     </option>
                   ))}
                 </select>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="Müşteri Adı Soyadı"
-                  value={formData.new_customer_name}
+              </div>
+
+              <div>
+                <label className={labelClass}>Personel</label>
+                <select
+                  value={formData.employee_id}
                   onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      new_customer_name: e.target.value,
-                    })
+                    setFormData((prev) => ({
+                      ...prev,
+                      employee_id: e.target.value,
+                    }))
                   }
-                  required
-                  style={inputStyle}
-                />
-              )}
-              <select
-                value={formData.service_id || ""}
-                onChange={handleServiceChange}
-                required
-                className="form-control"
-              >
-                <option value="">-- Hizmet / İşlem Seçin --</option>
-                {appointmentServices.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name} ({service.price} {service.currency || "TRY"})
-                    - {service.duration_minutes || 60} dk
-                  </option>
-                ))}
-              </select>
+                  className={fieldClass}
+                >
+                  <option value="">-- Personel (isteğe bağlı) --</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name ||
+                        `${emp.first_name || ""} ${emp.last_name || ""}`.trim()}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-              <select
-                value={formData.employee_id}
-                onChange={(e) =>
-                  setFormData({ ...formData, employee_id: e.target.value })
-                }
-                style={inputStyle}
-              >
-                <option value="">-- Hizmet Verecek Personel --</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.first_name} {e.last_name}
-                  </option>
-                ))}
-              </select>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
-                }}
-              >
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label style={{ fontSize: "12px" }}>Kişi Sayısı:</label>
+                  <label className={labelClass}>Süre (dk)</label>
                   <input
                     type="number"
-                    min="1"
-                    max={selectedCell.room.capacity}
-                    value={formData.guest_count}
-                    onChange={(e) =>
-                      setFormData({ ...formData, guest_count: e.target.value })
-                    }
-                    required
-                    style={inputStyle}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: "12px" }}>Süre (Dakika):</label>
-                  <input
-                    type="number"
+                    min="15"
                     step="15"
                     value={formData.duration_minutes}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
+                      setFormData((prev) => ({
+                        ...prev,
                         duration_minutes: e.target.value,
-                      })
+                      }))
                     }
-                    required
-                    style={inputStyle}
+                    className={fieldClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Kişi sayısı</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.guest_count}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        guest_count: e.target.value,
+                      }))
+                    }
+                    className={fieldClass}
                   />
                 </div>
               </div>
 
-              <input
-                type="text"
-                placeholder="Özel Notlar"
-                value={formData.notes}
-                onChange={(e) =>
-                  setFormData({ ...formData, notes: e.target.value })
-                }
-                style={inputStyle}
-              />
+              <div>
+                <label className={labelClass}>Not</label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, notes: e.target.value }))
+                  }
+                  rows={2}
+                  className={fieldClass}
+                />
+              </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "10px",
-                  marginTop: "10px",
-                }}
-              >
+              <div className="mt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setActiveModal(null)}
-                  style={cancelBtnStyle}
+                  className={btnSecondary}
                 >
                   İptal
                 </button>
-                <button type="submit" style={saveBtnStyle}>
-                  Odayı Aç / Kaydet
+                <button type="submit" className={btnPrimary}>
+                  <Save size={15} /> Kaydet
                 </button>
               </div>
             </form>
@@ -891,7 +615,6 @@ const RoomGridMatrix = () => {
         </div>
       )}
 
-      {/* MODAL 2: GELİŞMİŞ ODA DETAYI VE 3 SÜTUNLU ADİSYON / POS PANELİ */}
       {activeModal === "detail" &&
         selectedApp &&
         (() => {
@@ -903,193 +626,104 @@ const RoomGridMatrix = () => {
 
           const isPastAppointment = appDate < today;
 
-          const filteredProducts = products.filter((p) => {
-            if (!selectedCategory) return true;
-
-            // Seçili kategorinin objesini bulalım (Eğer ID üzerinden çalışıyorsak)
-            const currentCatObj = productCategories.find(
-              (c) => String(c.id) === String(selectedCategory),
-            );
-            const categoryName = currentCatObj
-              ? currentCatObj.name || currentCatObj.group_name
-              : null;
-
-            // Üründen gelen grup değerleri
-            const pCatId = p.category_id || p.group_id;
-            const pCatName = p.group_name || p.category_name || p.category;
-
-            // 1. ID eşleşmesi kontrolü
-            const matchesId =
-              pCatId && String(pCatId) === String(selectedCategory);
-
-            // 2. İsim eşleşmesi kontrolü (Örn: "ÜRÜN" === "ÜRÜN")
-            const matchesNameByState =
-              pCatName &&
-              String(pCatName).trim().toUpperCase() ===
-                String(selectedCategory).trim().toUpperCase();
-            const matchesNameByObj =
-              pCatName &&
-              categoryName &&
-              String(pCatName).trim().toUpperCase() ===
-                String(categoryName).trim().toUpperCase();
-
-            return matchesId || matchesNameByState || matchesNameByObj;
-          });
-          // Adisyon Ekstralar ve Genel Toplam Hesaplama
-          const extrasTotal = currentOrders.reduce(
-            (sum, item) => sum + parseFloat(item.total_price || 0),
-            0,
+          const servicePrice = parseFloat(
+            selectedApp.service_price || selectedApp.price || 0,
           );
-          const servicePrice = parseFloat(selectedApp.service_price || 0);
-          const grandTotal = servicePrice + extrasTotal;
+          const serviceCurrency =
+            selectedApp.service_currency ||
+            selectedApp.currency ||
+            selectedApp.currency_code ||
+            "TRY";
+          const extrasByCurrency = totalsByCurrency(currentOrders);
+          const localBreakdown = sumItemsToTry(
+            [
+              {
+                total_price: servicePrice,
+                currency: serviceCurrency,
+              },
+              ...currentOrders,
+            ],
+            exchangeRates,
+          );
 
           return (
-            <div style={modalOverlayStyle}>
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
               <div
-                style={{
-                  ...modalContentStyle,
-                  width: "1100px",
-                  maxWidth: "95vw",
-                  padding: "20px",
-                }}
+                className={cn(
+                  cardClass,
+                  "w-full max-w-[1100px] p-6",
+                )}
               >
-                {/* PANOL BAŞLIĞI */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <h3 style={{ margin: 0 }}>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-100">
                     Oda Adisyon & Hizmet Paneli ({selectedApp.room_name})
                   </h3>
                   {isPastAppointment && (
-                    <span
-                      style={{
-                        background: "#fef3c7",
-                        color: "#92400e",
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        fontSize: "12px",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      🔒 Geçmiş Kayıt (Sadece Görüntüleme)
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:ring-amber-500/25">
+                      <Lock size={12} /> Geçmiş Kayıt
                     </span>
                   )}
                 </div>
-                <hr style={{ margin: "10px 0 15px 0" }} />
 
-                {/* 3 SÜTUNLU POS DÜZENİ */}
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "320px 1fr 340px",
-                    gap: "15px",
-                    height: "480px",
-                  }}
-                >
-                  {/* SOL SÜTUN: ÜRÜN GRUPLARI & ÜRÜN LİSTESİ */}
-                  <div
-                    style={{
-                      border: "2px solid #000",
-                      borderRadius: "6px",
-                      padding: "10px",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "5px",
-                        overflowX: "auto",
-                        paddingBottom: "8px",
-                        marginBottom: "8px",
-                        borderBottom: "1px solid #ddd",
-                      }}
-                    >
-                      {productCategories.map((cat) => (
-                        <button
-                          key={cat.id}
-                          onClick={() => setSelectedCategory(cat.id)}
-                          style={{
-                            background:
-                              String(selectedCategory) === String(cat.id)
-                                ? "#0f172a"
-                                : "#e2e8f0",
-                            color:
-                              String(selectedCategory) === String(cat.id)
-                                ? "#fff"
-                                : "#000",
-                            border: "none",
-                            padding: "8px 12px",
-                            fontWeight: "bold",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {cat.name || cat.group_name}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* SEÇİLİ GRUBUN ÜRÜNLERİ */}
-                    <div
-                      style={{
-                        flex: 1,
-                        overflowY: "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                      }}
-                    >
-                      {filteredProducts.length === 0 ? (
-                        <div
-                          style={{
-                            color: "#888",
-                            fontSize: "12px",
-                            textAlign: "center",
-                            marginTop: "20px",
-                          }}
-                        >
-                          Bu grupta ürün bulunamadı.
+                <div className="grid h-[480px] grid-cols-1 gap-4 lg:grid-cols-[320px_1fr_340px]">
+                  <div className="flex flex-col rounded-2xl border border-slate-200/80 bg-white/60 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <div className="mb-3 flex flex-wrap gap-1.5 border-b border-slate-200 pb-3 dark:border-slate-700">
+                      {productCategories.length === 0 ? (
+                        <div className="py-2 text-xs text-slate-500">
+                          Aktif ürün grubu yok.
                         </div>
                       ) : (
-                        filteredProducts.map((prod) => (
+                        productCategories.map((cat) => {
+                          const selected =
+                            String(selectedCategory) === String(cat.id);
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => handleSelectProductGroup(cat.id)}
+                              className={cn(
+                                "rounded-full px-3 py-1.5 text-xs font-medium transition",
+                                selected
+                                  ? "bg-slate-900 text-white shadow-sm dark:bg-amber-600"
+                                  : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700",
+                              )}
+                            >
+                              {cat.name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="flex flex-1 flex-col gap-1.5 overflow-y-auto">
+                      {productsLoading ? (
+                        <div className="mt-6 text-center text-xs text-slate-500">
+                          Ürünler yükleniyor...
+                        </div>
+                      ) : !selectedCategory ? (
+                        <div className="mt-6 text-center text-xs text-slate-500">
+                          Ürünleri görmek için bir grup seçin.
+                        </div>
+                      ) : products.length === 0 ? (
+                        <div className="mt-6 text-center text-xs text-slate-500">
+                          Bu grupta aktif ürün bulunamadı.
+                        </div>
+                      ) : (
+                        products.map((prod) => (
                           <button
                             key={prod.id}
                             onClick={() => handleAddProductTemp(prod)}
                             disabled={isPastAppointment}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "10px",
-                              background: "#f8fafc",
-                              border: "1px solid #cbd5e1",
-                              borderRadius: "4px",
-                              cursor: isPastAppointment
-                                ? "not-allowed"
-                                : "pointer",
-                              textAlign: "left",
-                            }}
+                            className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-left text-sm transition hover:border-amber-300 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800/60 dark:hover:border-amber-500/40 dark:hover:bg-slate-800"
                           >
-                            <span
-                              style={{ fontWeight: "bold", fontSize: "13px" }}
-                            >
+                            <span className="font-medium text-slate-800 dark:text-slate-100">
                               {prod.name}
                             </span>
-                            <span
-                              style={{
-                                color: "#16a34a",
-                                fontWeight: "bold",
-                                fontSize: "13px",
-                              }}
-                            >
-                              {prod.price} ₺
+                            <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                              {formatCurrency(
+                                prod.price,
+                                prod.currency || prod.currency_code,
+                              )}
                             </span>
                           </button>
                         ))
@@ -1097,140 +731,92 @@ const RoomGridMatrix = () => {
                     </div>
                   </div>
 
-                  {/* ORTA SÜTUN: REZERVASYON & ODA DETAYLARI */}
-                  <div
-                    style={{
-                      padding: "15px",
-                      background: "#f8fafc",
-                      borderRadius: "6px",
-                      border: "1px solid #e2e8f0",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        marginTop: 0,
-                        borderBottom: "1px solid #ccc",
-                        paddingBottom: "8px",
-                      }}
-                    >
-                      REZERVASYON BİLGİLERİ
+                  <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+                    <h4 className="mb-3 border-b border-slate-200 pb-2 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                      Rezervasyon Bilgileri
                     </h4>
-                    <div style={{ fontSize: "15px", lineHeight: "2.4" }}>
-                      <p style={{ margin: 0 }}>
-                        <strong>ODA:</strong> {selectedApp.room_name}
+                    <div className="space-y-3 text-sm text-slate-700 dark:text-slate-200">
+                      <p>
+                        <span className="mr-2 text-xs uppercase tracking-wide text-slate-400">
+                          Oda
+                        </span>
+                        {selectedApp.room_name}
                       </p>
-                      <p style={{ margin: 0 }}>
-                        <strong>PERSONEL:</strong>{" "}
+                      <p>
+                        <span className="mr-2 text-xs uppercase tracking-wide text-slate-400">
+                          Personel
+                        </span>
                         {selectedApp.employee_fullname || "Atanmadı"}
                       </p>
-                      <p style={{ margin: 0 }}>
-                        <strong>MÜŞTERİ:</strong>{" "}
-                        {selectedApp.customer_fullname}
+                      <p>
+                        <span className="mr-2 text-xs uppercase tracking-wide text-slate-400">
+                          Müşteri
+                        </span>
+                        {selectedApp.customer_fullname || "Bilinmiyor"}
                       </p>
-                      <p style={{ margin: 0 }}>
-                        <strong>HİZMET:</strong> {selectedApp.service_name}
+                      <p>
+                        <span className="mr-2 text-xs uppercase tracking-wide text-slate-400">
+                          Hizmet
+                        </span>
+                        {selectedApp.service_name ||
+                          selectedApp.product_name ||
+                          selectedApp.service ||
+                          "Seçilmedi"}
+                        {servicePrice
+                          ? ` · ${formatCurrency(servicePrice, serviceCurrency)}`
+                          : ""}
                       </p>
-                      <p style={{ margin: 0 }}>
-                        <strong>KİŞİ SAYISI:</strong> {selectedApp.guest_count}{" "}
-                        Kişi
+                      <p>
+                        <span className="mr-2 text-xs uppercase tracking-wide text-slate-400">
+                          Kişi
+                        </span>
+                        {selectedApp.guest_count} Kişi
                       </p>
                       {selectedApp.notes && (
-                        <p
-                          style={{ margin: 0, color: "#666", fontSize: "13px" }}
-                        >
-                          <strong>NOT:</strong> {selectedApp.notes}
+                        <p className="text-slate-500 dark:text-slate-400">
+                          <span className="mr-2 text-xs uppercase tracking-wide text-slate-400">
+                            Not
+                          </span>
+                          {selectedApp.notes}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  {/* SAĞ SÜTUN: ADİSYON SİPARİŞ LİSTESİ VE TUTAR HESABI (SCROLLBAR VE SİLME MEVCUT) */}
-                  <div
-                    style={{
-                      border: "2px solid #000",
-                      borderRadius: "6px",
-                      padding: "10px",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        margin: "0 0 10px 0",
-                        borderBottom: "1px solid #000",
-                        paddingBottom: "8px",
-                      }}
-                    >
-                      ADİSYON / SİPARİŞLER
+                  <div className="flex flex-col rounded-2xl border border-slate-200/80 bg-white/60 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+                    <h4 className="mb-3 border-b border-slate-200 pb-2 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                      Adisyon / Siparişler
                     </h4>
 
-                    {/* SİPARİŞ EDİLEN ÜRÜNLERİN ALT ALTA LİSTESİ (SCROLLBAR EKLENDİ) */}
-                    <div
-                      style={{
-                        flex: 1,
-                        overflowY: "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                        maxHeight: "250px",
-                        paddingRight: "4px",
-                      }}
-                    >
+                    <div className="mb-3 flex max-h-[250px] flex-1 flex-col gap-1.5 overflow-y-auto">
                       {currentOrders.length === 0 ? (
-                        <div
-                          style={{
-                            color: "#888",
-                            fontSize: "12px",
-                            textAlign: "center",
-                            marginTop: "20px",
-                          }}
-                        >
+                        <div className="mt-6 text-center text-xs text-slate-500">
                           Henüz sipariş eklenmedi.
                         </div>
                       ) : (
                         currentOrders.map((order, index) => (
                           <div
                             key={order.id || index}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              padding: "6px 0",
-                              borderBottom: "1px dashed #ccc",
-                              fontSize: "13px",
-                            }}
+                            className="flex items-center justify-between border-b border-dashed border-slate-200 py-2 text-sm dark:border-slate-700"
                           >
-                            <span>
+                            <span className="text-slate-700 dark:text-slate-200">
                               {order.quantity || 1}x{" "}
                               {order.product_name || order.name}
                             </span>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "8px",
-                              }}
-                            >
-                              <span style={{ fontWeight: "bold" }}>
-                                {order.total_price} ₺
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">
+                                {formatCurrency(
+                                  order.total_price,
+                                  order.currency || order.currency_code,
+                                )}
                               </span>
                               {!isPastAppointment && (
                                 <button
                                   onClick={() => handleRemoveProductTemp(index)}
-                                  style={{
-                                    background: "#ef4444",
-                                    color: "#fff",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    padding: "2px 6px",
-                                    cursor: "pointer",
-                                    fontSize: "11px",
-                                    fontWeight: "bold",
-                                  }}
+                                  className="rounded-md p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                                   title="Ürünü Adisyondan Çıkar"
                                 >
-                                  ✕
+                                  <X size={14} />
                                 </button>
                               )}
                             </div>
@@ -1239,88 +825,51 @@ const RoomGridMatrix = () => {
                       )}
                     </div>
 
-                    {/* FİYAT HESAP DÖKÜMÜ VE BUTONLAR */}
-                    <div
-                      style={{
-                        borderTop: "2px solid #000",
-                        paddingTop: "10px",
-                        marginTop: "10px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: "13px",
-                        }}
-                      >
-                        <span>Hizmet Bedeli:</span>
-                        <span>{servicePrice} ₺</span>
+                    <div className="border-t border-slate-200 pt-3 dark:border-slate-700">
+                      <div className="flex justify-between text-sm text-slate-600 dark:text-slate-300">
+                        <span>Hizmet Bedeli</span>
+                        <span>{formatCurrency(servicePrice, serviceCurrency)}</span>
                       </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: "13px",
-                          marginTop: "4px",
-                        }}
-                      >
-                        <span>Ekstralar:</span>
-                        <span>{extrasTotal} ₺</span>
+                      <div className="mt-1 flex justify-between gap-3 text-sm text-slate-600 dark:text-slate-300">
+                        <span>Ekstralar</span>
+                        <span className="text-right">
+                          {formatMixedTotals(extrasByCurrency)}
+                        </span>
                       </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          fontSize: "16px",
-                          fontWeight: "bold",
-                          color: "#b91c1c",
-                          marginTop: "8px",
-                          borderTop: "1px solid #ddd",
-                          paddingTop: "6px",
-                        }}
-                      >
-                        <span>GENEL TOPLAM:</span>
-                        <span>{grandTotal} ₺</span>
+                      <div className="mt-2 rounded-xl border border-amber-200/80 bg-amber-50 px-3 py-2 dark:border-amber-500/20 dark:bg-amber-500/10">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="text-xs font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-200">
+                              Yerel Tutar (TL Karşılığı)
+                            </div>
+                            {exchangeDate && (
+                              <div className="mt-0.5 text-[10px] text-amber-700/80 dark:text-amber-300/80">
+                                TCMB kur tarihi:{" "}
+                                {new Date(exchangeDate).toLocaleDateString("tr-TR")}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-base font-semibold text-amber-900 dark:text-amber-200">
+                            {localBreakdown.missing
+                              ? "Kur bekleniyor"
+                              : formatCurrency(localBreakdown.total, "TRY")}
+                          </span>
+                        </div>
                       </div>
 
-                      {/* KAYDET VE KAPAT BUTONLARI */}
                       {!isPastAppointment && (
-                        <div
-                          style={{
-                            display: "flex",
-                            gap: "8px",
-                            marginTop: "12px",
-                          }}
-                        >
+                        <div className="mt-3 flex gap-2">
                           <button
                             onClick={handleSaveOrders}
                             disabled={isSaving}
-                            style={{
-                              flex: 1,
-                              backgroundColor: "#16a34a",
-                              color: "#fff",
-                              border: "none",
-                              padding: "8px",
-                              borderRadius: "4px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
+                            className={cn(btnSuccess, "flex-1")}
                           >
+                            <Save size={15} />
                             {isSaving ? "Kaydediliyor..." : "Kaydet"}
                           </button>
                           <button
                             onClick={() => setActiveModal(null)}
-                            style={{
-                              flex: 1,
-                              backgroundColor: "#64748b",
-                              color: "#fff",
-                              border: "none",
-                              padding: "8px",
-                              borderRadius: "4px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                            }}
+                            className={cn(btnSecondary, "flex-1")}
                           >
                             Kapat
                           </button>
@@ -1330,36 +879,20 @@ const RoomGridMatrix = () => {
                   </div>
                 </div>
 
-                {/* ALT AKSİYON BUTONLARI */}
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginTop: "15px",
-                  }}
-                >
+                <div className="mt-4 flex items-center justify-between">
                   {!isPastAppointment && (
                     <button
                       onClick={() => handleDeleteReservation()}
-                      style={{
-                        background: "#dc2626",
-                        color: "#fff",
-                        border: "none",
-                        padding: "8px 16px",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontSize: "13px",
-                      }}
+                      className={btnDelete}
                     >
-                      Rezervasyonu İptal Et / Sil
+                      <Trash2 size={14} /> Rezervasyonu İptal Et
                     </button>
                   )}
 
                   {isPastAppointment && (
                     <button
                       onClick={() => setActiveModal(null)}
-                      style={cancelBtnStyle}
+                      className={btnSecondary}
                     >
                       Kapat
                     </button>
@@ -1371,50 +904,6 @@ const RoomGridMatrix = () => {
         })()}
     </div>
   );
-};
-
-// CSS-in-JS Stillendirmeleri
-const modalOverlayStyle = {
-  position: "fixed",
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: "rgba(0,0,0,0.5)",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  zIndex: 1000,
-};
-const modalContentStyle = {
-  background: "#fff",
-  padding: "20px",
-  borderRadius: "8px",
-  width: "420px",
-  maxWidth: "90%",
-};
-const inputStyle = {
-  width: "100%",
-  padding: "8px",
-  borderRadius: "4px",
-  border: "1px solid #ccc",
-  boxSizing: "border-box",
-};
-const saveBtnStyle = {
-  background: "#2563eb",
-  color: "#fff",
-  border: "none",
-  padding: "8px 16px",
-  borderRadius: "4px",
-  cursor: "pointer",
-};
-const cancelBtnStyle = {
-  background: "#64748b",
-  color: "#fff",
-  border: "none",
-  padding: "8px 16px",
-  borderRadius: "4px",
-  cursor: "pointer",
 };
 
 export default RoomGridMatrix;
